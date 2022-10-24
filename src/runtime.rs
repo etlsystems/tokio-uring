@@ -70,7 +70,7 @@ impl Runtime {
         Ok(Runtime { driver, local, rt })
     }
 
-    /// Runs a future to completion on the current runtime 
+    /// Runs a future to completion on the current runtime
     pub fn block_on<F>(&self, future: F) -> F::Output
     where
         F: Future,

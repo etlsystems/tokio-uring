@@ -2,6 +2,7 @@ use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
 };
 use futures::stream::{self, StreamExt};
+use pprof::criterion::{Output, PProfProfiler};
 
 struct AsyncRuntime(tokio_uring::Runtime);
 
@@ -49,7 +50,7 @@ fn bench(c: &mut Criterion) {
     builder.entries(128).uring_builder(&ring_opts);
 
     let runtime = AsyncRuntime(tokio_uring::Runtime::new(&builder).unwrap());
-    (runtime);
+    let runtime = &runtime;
 
     for concurrency in [1, 32, 64, 256].iter() {
         opts.concurrency = *concurrency;
@@ -62,7 +63,7 @@ fn bench(c: &mut Criterion) {
             |b, opts| {
                 // Custom iterator used because we don't expose access to runtime,
                 // which is required to do async benchmarking with criterion
-                b.to_async(&runtime).iter(|| run_no_ops(opts));
+                b.to_async(runtime).iter(|| run_no_ops(opts));
             },
         );
     }
