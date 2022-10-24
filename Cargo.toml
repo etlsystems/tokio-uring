@@ -31,6 +31,11 @@ tokio-test = "0.4.2"
 iai = "0.1.1"
 futures = "0.3.25"
 criterion = {version = "0.3.6", features = ["async"]}
+pprof = {version = "0.10.1", features = ["flamegraph", "criterion"]}
+
+[profile.release]
+lto = "fat"
+codegen = "1"
 
 [package.metadata.docs.rs]
 all-features = true

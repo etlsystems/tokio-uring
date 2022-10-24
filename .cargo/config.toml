@@ -1,2 +1,8 @@
 [env]
 RUST_TEST_THREADS = { value = "1" }
+
+[target."x86_64-unknown-linux-gnu"]
+rustflags = [
+    # Optimise for modern x86s
+    "-C", "target-cpu=x86-64-v3"
+    ]
