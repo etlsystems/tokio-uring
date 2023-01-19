@@ -47,6 +47,8 @@ impl<T: IoBuf, U: IoBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
         msghdr.msg_name = socket_addr.as_ptr() as *mut libc::c_void;
         msghdr.msg_namelen = socket_addr.len();
 
+        println!("msghdr.msg_iovlen = {}, msghdr.msg_namelen = {}", msghdr.msg_iovlen, msghdr.msg_namelen);
+
         match msg_control {
             Some(ref _msg_control) => {
                 msghdr.msg_control = _msg_control.stable_ptr() as *mut _;
