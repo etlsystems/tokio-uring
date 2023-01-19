@@ -15,7 +15,7 @@ pub(crate) struct SendMsgZc<T, U> {
     #[allow(dead_code)]
     socket_addr: Box<SockAddr>,
     msg_control: Option<U>,
-    msghdr: libc::msghdr,
+    msghdr: Box<libc::msghdr>,
 
     /// Hold the number of transmitted bytes
     bytes: usize,
