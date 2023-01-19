@@ -92,6 +92,7 @@ impl<T, U> Completable for SendMsgZc<T, U> {
         // Add the number of bytes to res.
         match res {
             Ok(_res) => res = Ok(_res + self.bytes),
+            _ => (),
         }
 
         // Recover the data buffers.
