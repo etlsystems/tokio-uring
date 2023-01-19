@@ -87,6 +87,9 @@ impl<T, U> Completable for SendMsgZc<T, U> {
         // Convert the operation result to `usize`
         let res = cqe.result.map(|v| v as usize);
 
+        // Add the number of bytes to res.
+        res += self.bytes;
+
         // Recover the data buffers.
         let io_bufs = self.io_bufs;
 
