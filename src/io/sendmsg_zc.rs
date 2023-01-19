@@ -60,6 +60,8 @@ impl<T: IoBuf, U: IoBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
             }
         }
 
+        println!("msghdr.msg_control = {:?}, msghdr.msg_controllen = {}", msghdr.msg_control, msghdr.msg_controllen);
+
         CONTEXT.with(|x| {
             x.handle().expect("Not in a runtime context").submit_op(
                 SendMsgZc {
