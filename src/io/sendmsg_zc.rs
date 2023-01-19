@@ -32,7 +32,7 @@ impl<T: IoBuf, U: IoBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
 
         let socket_addr = Box::new(SockAddr::from(socket_addr));
 
-        let mut msghdr: libc::msghdr = unsafe { std::mem::zeroed() };
+        let mut msghdr: Box<libc::msghdr> = Box::new(unsafe { std::mem::zeroed() });
 
         let mut io_slices: Vec<IoSlice> = Vec::with_capacity(io_bufs.len());
 
@@ -75,7 +75,7 @@ impl<T: IoBuf, U: IoBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
                 |sendmsg_zc| {
                     opcode::SendMsgZc::new(
                         types::Fd(sendmsg_zc.fd.raw_fd()),
-                        &sendmsg_zc.msghdr as *const _,
+                        sendmsg_zc.msghdr.as_ref() as *const _,
                     )
                     .build()
                 },
