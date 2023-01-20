@@ -95,13 +95,7 @@ impl<T, U> Completable for SendMsgZc<T, U> {
 
     fn complete(self, cqe: CqeResult) -> (io::Result<usize>, Vec<T>, Option<U>) {
         // Convert the operation result to `usize`
-        let mut res = cqe.result.map(|v| v as usize);
-
-        // Add the number of bytes to res.
-        match res {
-            Ok(_res) => res = Ok(_res + self.bytes),
-            _ => (),
-        }
+        let res = cqe.result.map(|v| self.bytes + v as usize);
 
         // Recover the data buffers.
         let io_bufs = self.io_bufs;
