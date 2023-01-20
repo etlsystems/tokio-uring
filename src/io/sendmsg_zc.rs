@@ -44,8 +44,12 @@ impl<T: IoBuf, U: IoBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
 
         println!("io_slices.as_ptr() = {:?}", io_slices.as_ptr());
 
-        println!("io_slices[0].as_ptr() = {:?}, io_slices[0].len() = {}", io_slices[0].as_ptr(), io_slices[0].len());
-        println!("io_slices[1].as_ptr() = {:?}, io_slices[1].len() = {}", io_slices[1].as_ptr(), io_slices[1].len());
+        for i in 0..io_slices.len()
+        {
+            println!("io_slices[{}].as_ptr() = {:?}, io_slices[{}].len() = {}", i, io_slices[i].as_ptr(), i, io_slices[i].len());
+        }
+        
+        //println!("io_slices[1].as_ptr() = {:?}, io_slices[1].len() = {}", io_slices[1].as_ptr(), io_slices[1].len());
 
         msghdr.msg_iov = io_slices.as_ptr() as *mut _;
         msghdr.msg_iovlen = io_slices.len() as _;
