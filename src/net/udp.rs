@@ -273,6 +273,18 @@ impl UdpSocket {
             .await
     }
 
+    /// Like sendmsg_zc, without the zc
+    pub async fn sendmsg<T: BoundedBuf, U: BoundedBuf>(
+        &self,
+        io_slices: Vec<T>,
+        socket_addr: Option<SocketAddr>,
+        msg_control: Option<U>,
+    ) -> (io::Result<usize>, Vec<T>, Option<U>) {
+        self.inner
+            .sendmsg(io_slices, socket_addr, msg_control)
+            .await
+    }
+
     /// Receives a single datagram message on the socket.
     ///
     /// On success, returns the number of bytes read and the origin.
