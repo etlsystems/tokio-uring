@@ -327,6 +327,13 @@ impl UdpSocket {
         self.inner.write(buf)
     }
 
+    /// Writes vectored data into the socket from the specified buffers.
+    ///
+    /// Returns the original buffers and quantity of data written.
+    pub async fn writev<T: BoundedBuf>(&self, buf: Vec<T>) -> crate::BufResult<usize, Vec<T>> {
+        self.inner.writev(buf).await
+    }
+
     /// Writes data into the socket from a registered buffer.
     ///
     /// Like [`write`], but using a pre-mapped buffer
