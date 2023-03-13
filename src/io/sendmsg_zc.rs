@@ -71,6 +71,10 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
         }
 
         CONTEXT.with(|x| {
+            assert!(msghdr.msg_iovlen > 0);
+            assert_eq!(msghdr.msg_iov, io_slices.as_ptr() as *const _ as *mut _);
+            assert!(io_slices.len() > 0);
+            assert!(io_slices[0].len() > 0);
             x.handle().expect("Not in a runtime context").submit_op(
                 SendMsgZc {
                     fd: fd.clone(),
@@ -82,7 +86,6 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
                     bytes: 0,
                 },
                 |sendmsg_zc| {
-                    assert!(msghdr.msg_iovlen > 0);
                     opcode::SendMsgZc::new(
                         types::Fd(sendmsg_zc.fd.raw_fd()),
                         &sendmsg_zc.msghdr as *const _,
