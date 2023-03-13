@@ -82,6 +82,7 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
                     bytes: 0,
                 },
                 |sendmsg_zc| {
+                    assert!(msghdr.msg_iovlen > 0);
                     opcode::SendMsgZc::new(
                         types::Fd(sendmsg_zc.fd.raw_fd()),
                         &sendmsg_zc.msghdr as *const _,
