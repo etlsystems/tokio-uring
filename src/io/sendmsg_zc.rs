@@ -45,30 +45,17 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
         msghdr.msg_iov = io_slices.as_ptr() as *mut _;
         msghdr.msg_iovlen = io_slices.len() as _;
 
-        let socket_addr = match socket_addr {
-            Some(_socket_addr) => {
-                let socket_addr = Box::new(SockAddr::from(_socket_addr));
-                msghdr.msg_name = socket_addr.as_ptr() as *mut libc::c_void;
-                msghdr.msg_namelen = socket_addr.len();
-                Some(socket_addr)
-            }
-            None => {
-                msghdr.msg_name = std::ptr::null_mut();
-                msghdr.msg_namelen = 0;
-                None
-            }
-        };
+        let socket_addr = socket_addr.map(|_socket_addr| {
+            let socket_addr = Box::new(SockAddr::from(_socket_addr));
+            msghdr.msg_name = socket_addr.as_ptr() as *mut libc::c_void;
+            msghdr.msg_namelen = socket_addr.len();
+            socket_addr
+        });
 
-        match msg_control {
-            Some(ref _msg_control) => {
-                msghdr.msg_control = _msg_control.stable_ptr() as *mut _;
-                msghdr.msg_controllen = _msg_control.bytes_init();
-            }
-            None => {
-                msghdr.msg_control = std::ptr::null_mut();
-                msghdr.msg_controllen = 0_usize;
-            }
-        }
+        msg_control.as_ref().map(|_msg_control| {
+            msghdr.msg_control = _msg_control.stable_ptr() as *mut _;
+            msghdr.msg_controllen = _msg_control.bytes_init();
+        });
 
         CONTEXT.with(|x| {
             assert!(msghdr.msg_iovlen > 0);
