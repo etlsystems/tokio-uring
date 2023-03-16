@@ -48,6 +48,7 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
         msghdr.msg_iovlen = io_slices.len() as _;
 
         let socket_addr = socket_addr.map(|_socket_addr| {
+            tracing::info!("{:?}", _socket_addr);
             let socket_addr = Box::new(SockAddr::from(_socket_addr));
             msghdr.msg_name = socket_addr.as_ptr() as *mut libc::c_void;
             msghdr.msg_namelen = socket_addr.len();
