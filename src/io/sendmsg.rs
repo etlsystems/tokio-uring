@@ -115,6 +115,6 @@ impl<T, U> Completable for SendMsg<T, U> {
 impl<T, U> Updateable for SendMsg<T, U> {
     fn update(&mut self, cqe: CqeResult) {
         // uring send_zc promises there will be no error on CQE's marked more
-        self.bytes += *cqe.result.as_ref().unwrap() as usize;
+        self.bytes += *cqe.result.as_ref().expect("No errors") as usize;
     }
 }

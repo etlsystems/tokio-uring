@@ -21,6 +21,8 @@ pub(crate) struct SendMsgZc<T, U> {
 
     /// Hold the number of transmitted bytes
     bytes: usize,
+
+    error: Option<io::Error>
 }
 
 impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
@@ -57,6 +59,8 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
             msghdr.msg_controllen = _msg_control.bytes_init();
         });
 
+        let error = None;
+
         CONTEXT.with(|x| {
             assert!(msghdr.msg_iovlen > 0);
             assert_eq!(msghdr.msg_iov, io_slices.as_ptr() as *const _ as *mut _);
@@ -71,6 +75,7 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
                     msg_control,
                     msghdr,
                     bytes: 0,
+                    error
                 },
                 |sendmsg_zc| {
                     opcode::SendMsgZc::new(
@@ -104,6 +109,10 @@ impl<T, U> Completable for SendMsgZc<T, U> {
 impl<T, U> Updateable for SendMsgZc<T, U> {
     fn update(&mut self, cqe: CqeResult) {
         // uring send_zc promises there will be no error on CQE's marked more
-        self.bytes += *cqe.result.as_ref().unwrap() as usize;
+        // This doesn't appear to be true for sendmsg_zc
+        match cqe.result{
+            Ok (n) => self.bytes += n as usize,
+            Err(e) =>             self.error = Some(e),
+        }
     }
 }
