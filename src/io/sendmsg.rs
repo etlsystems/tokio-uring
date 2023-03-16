@@ -72,9 +72,6 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsg<T, U>> {
         }
 
         CONTEXT.with(|x| {
-            assert!(socket_addr.is_some());
-            assert!(msghdr.msg_namelen > 0);
-            assert!(msghdr.msg_name != std::ptr::null_mut());
             x.handle().expect("Not in a runtime context").submit_op(
                 SendMsg {
                     fd: fd.clone(),
