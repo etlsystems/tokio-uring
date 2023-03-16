@@ -19,10 +19,8 @@ pub(crate) struct SendMsgZc<T, U> {
     msg_control: Option<U>,
     msghdr: libc::msghdr,
 
-    /// Hold the number of transmitted bytes
-    bytes: usize,
-
-    error: Option<io::Error>
+    /// Hold the result of number of transmitted bytes or socket error
+    result: Result<usize, io::Error>
 }
 
 impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
@@ -48,9 +46,10 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
         msghdr.msg_iovlen = io_slices.len() as _;
 
         let socket_addr = socket_addr.map(|_socket_addr| {
-            tracing::info!("{:?}", _socket_addr);
+            tracing::info!("original {:?}", _socket_addr);
             let socket_addr = Box::new(SockAddr::from(_socket_addr));
-            msghdr.msg_name = socket_addr.as_ptr() as *mut libc::c_void;
+            tracing::info!("boxed {:?}", socket_addr);
+            msghdr.msg_name = socket_addr.as_ptr() as *const _ as *mut _;
             msghdr.msg_namelen = socket_addr.len();
             socket_addr
         });
@@ -59,8 +58,6 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
             msghdr.msg_control = _msg_control.stable_ptr() as *mut _;
             msghdr.msg_controllen = _msg_control.bytes_init();
         });
-
-        let error = None;
 
         CONTEXT.with(|x| {
             assert!(msghdr.msg_iovlen > 0);
@@ -75,8 +72,7 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
                     io_slices,
                     msg_control,
                     msghdr,
-                    bytes: 0,
-                    error
+                    result: Ok(0)
                 },
                 |sendmsg_zc| {
                     opcode::SendMsgZc::new(
@@ -93,12 +89,8 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
 impl<T, U> Completable for SendMsgZc<T, U> {
     type Output = (io::Result<usize>, Vec<T>, Option<U>);
 
-    fn complete(self, cqe: CqeResult) -> (io::Result<usize>, Vec<T>, Option<U>) {
-        // Convert the operation result to `usize`, and add previous byte count
-        let mut res = cqe.result.map(|v| self.bytes + v as usize);
-        if let Some(e) = self.error {
-            res = Err(e);
-        }
+    fn complete(mut self, cqe: CqeResult) -> (io::Result<usize>, Vec<T>, Option<U>) {
+        self.update(cqe);
 
         // Recover the data buffers.
         let io_bufs = self.io_bufs;
@@ -106,17 +98,16 @@ impl<T, U> Completable for SendMsgZc<T, U> {
         // Recover the ancillary data buffer.
         let msg_control = self.msg_control;
 
-        (res, io_bufs, msg_control)
+        (self.result, io_bufs, msg_control)
     }
 }
 
-impl<T, U> Updateable for SendMsgZc<T, U> {
+impl<T,U> Updateable for SendMsgZc<T, U>{
+    /// Update increments the number of bytes observed
+    /// If an error is observed, this will persist
     fn update(&mut self, cqe: CqeResult) {
-        // uring send_zc promises there will be no error on CQE's marked more
-        // This doesn't appear to be true for sendmsg_zc
-        match cqe.result{
-            Ok (n) => self.bytes += n as usize,
-            Err(e) =>             self.error = Some(e),
-        }
+        self.result.iter_mut().next().map(|x| {
+            cqe.result.map(|n| *x + n as usize) 
+        }); 
     }
 }

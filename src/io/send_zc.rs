@@ -11,8 +11,8 @@ pub(crate) struct SendZc<T> {
 
     pub(crate) buf: T,
 
-    /// Hold the number of transmitted bytes
-    bytes: usize,
+    /// Hold the Result of transmitted bytes / socket errors
+    result: Result<usize, io::Error>
 }
 
 impl<T: BoundedBuf> Op<SendZc<T>, MultiCQEFuture> {
@@ -24,7 +24,7 @@ impl<T: BoundedBuf> Op<SendZc<T>, MultiCQEFuture> {
                 SendZc {
                     fd: fd.clone(),
                     buf,
-                    bytes: 0,
+                    result: Ok(0),
                 },
                 |send| {
                     // Get raw buffer info
@@ -41,18 +41,20 @@ impl<T: BoundedBuf> Op<SendZc<T>, MultiCQEFuture> {
 impl<T> Completable for SendZc<T> {
     type Output = BufResult<usize, T>;
 
-    fn complete(self, cqe: CqeResult) -> Self::Output {
+    fn complete(mut self, cqe: CqeResult) -> Self::Output {
         // Convert the operation result to `usize`
-        let res = cqe.result.map(|v| self.bytes + v as usize);
+        self.update(cqe);
         // Recover the buffer
         let buf = self.buf;
-        (res, buf)
+        (self.result, buf)
     }
 }
 
 impl<T> Updateable for SendZc<T> {
     fn update(&mut self, cqe: CqeResult) {
-        // uring send_zc promises there will be no error on CQE's marked more
-        self.bytes += *cqe.result.as_ref().unwrap() as usize;
+        self.result.iter_mut().next().map(|x| {
+            cqe.result.map(|n| *x + n as usize) 
+        });
+
     }
 }
