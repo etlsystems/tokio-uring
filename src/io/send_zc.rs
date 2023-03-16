@@ -52,9 +52,8 @@ impl<T> Completable for SendZc<T> {
 
 impl<T> Updateable for SendZc<T> {
     fn update(&mut self, cqe: CqeResult) {
-        self.result.iter_mut().next().map(|x| {
-            cqe.result.map(|n| *x + n as usize) 
-        });
-
+        if let Ok(a) = self.result {
+            self.result = cqe.result.map(|n| a + n as usize)
+        }
     }
 }

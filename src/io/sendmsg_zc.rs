@@ -104,8 +104,8 @@ impl<T,U> Updateable for SendMsgZc<T, U>{
     /// Update increments the number of bytes observed
     /// If an error is observed, this will persist
     fn update(&mut self, cqe: CqeResult) {
-        self.result.iter_mut().next().map(|x| {
-            cqe.result.map(|n| *x + n as usize) 
-        }); 
+        if let Ok(a) = self.result {
+            self.result = cqe.result.map(|n| a + n as usize)
+        }
     }
 }
