@@ -50,3 +50,7 @@ harness = false
 name = "criterion_no_op"
 path = "benches/criterion/no_op.rs"
 harness = false
+
+
+[patch.crates-io]
+io-uring = { git = 'https://github.com/etlsystems/io-uring', branch = 'add_poll_first_flag' }

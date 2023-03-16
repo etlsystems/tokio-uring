@@ -76,6 +76,7 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
                     opcode::SendMsgZc::new(
                         types::Fd(sendmsg_zc.fd.raw_fd()),
                         &sendmsg_zc.msghdr as *const _,
+                        1 // .flags(io_uring::sys::IORING_RECVSEND_POLL_FIRST)
                     )
                     .build()
                 },
