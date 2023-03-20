@@ -18,7 +18,7 @@ pub(crate) struct SendMsg<T, U> {
     socket_addr: Option<Box<SockAddr>>,
     msg_control: Option<U>,
     #[allow(dead_code)]
-    msghdr: libc::msghdr,
+    msghdr: Box<libc::msghdr>,
 
     /// Hold the number of transmitted bytes
     bytes: usize,
@@ -33,7 +33,7 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsg<T, U>> {
     ) -> io::Result<Self> {
         use io_uring::{opcode, types};
 
-        let mut msghdr: libc::msghdr = unsafe { std::mem::zeroed() };
+        let mut msghdr: Box<libc::msghdr> = Box::new(unsafe { std::mem::zeroed() });
 
         let mut io_slices: Vec<IoSlice<'static>> = Vec::with_capacity(io_bufs.len());
 

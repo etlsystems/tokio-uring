@@ -17,7 +17,7 @@ pub(crate) struct SendMsgZc<T, U> {
     #[allow(dead_code)]
     socket_addr: Option<Box<SockAddr>>,
     msg_control: Option<U>,
-    msghdr: libc::msghdr,
+    msghdr: Box<libc::msghdr>,
 
     /// Hold the result of number of transmitted bytes or socket error
     result: Result<usize, io::Error>
@@ -32,7 +32,7 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
     ) -> io::Result<Self> {
         use io_uring::{opcode, types};
 
-        let mut msghdr: libc::msghdr = unsafe { std::mem::zeroed() };
+        let mut msghdr: libc::msghdr = Box::new(unsafe { std::mem::zeroed() });
 
         let mut io_slices: Vec<IoSlice<'static>> = Vec::with_capacity(io_bufs.len());
 
