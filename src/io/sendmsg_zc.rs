@@ -97,6 +97,8 @@ impl<T, U> Completable for SendMsgZc<T, U> {
     type Output = (io::Result<usize>, Vec<T>, Option<U>);
 
     fn complete(self, cqe: CqeResult) -> (io::Result<usize>, Vec<T>, Option<U>) {
+        let flags = cqe.flags;
+        tracing::trace!("Complete: flags {flags}");
         // Convert the operation result to `usize`, and add previous byte count
         let res = cqe.result.map(|v| self.bytes + v as usize);
 
