@@ -42,6 +42,8 @@ impl<T> Completable for SendZc<T> {
     type Output = BufResult<usize, T>;
 
     fn complete(self, cqe: CqeResult) -> Self::Output {
+        let flags = cqe.flags;
+        tracing::trace!("Complete: flags {flags}");
         // Convert the operation result to `usize`
         let res = cqe.result.map(|v| self.bytes + v as usize);
         // Recover the buffer
@@ -53,6 +55,8 @@ impl<T> Completable for SendZc<T> {
 impl<T> Updateable for SendZc<T> {
     fn update(&mut self, cqe: CqeResult) {
         // uring send_zc promises there will be no error on CQE's marked more
+        let flags = cqe.flags;
+        tracing::trace!("Update: flags {flags}");
         self.bytes += cqe.result.unwrap_or_default() as usize;
     }
 }

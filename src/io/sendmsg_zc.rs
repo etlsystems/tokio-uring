@@ -113,6 +113,8 @@ impl<T, U> Completable for SendMsgZc<T, U> {
 impl<T, U> Updateable for SendMsgZc<T, U> {
     fn update(&mut self, cqe: CqeResult) {
         // uring send_zc promises there will be no error on CQE's marked more
+        let flags = cqe.flags;
+        tracing::trace!("Update: flags {flags}");
         self.bytes += cqe.result.unwrap_or_default() as usize;
     }
 }
