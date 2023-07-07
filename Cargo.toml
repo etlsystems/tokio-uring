@@ -24,7 +24,6 @@ io-uring = "0.5.13"
 socket2 = { version = "0.4.4", features = ["all"] }
 bytes = { version = "1.0", optional = true }
 futures-util = { version = "0.3.26", default-features = false, features = ["std"] }
-tracing = "*"
 
 [dev-dependencies]
 tempfile = "3.2.0"

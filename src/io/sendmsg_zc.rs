@@ -97,12 +97,8 @@ impl<T, U> Completable for SendMsgZc<T, U> {
     type Output = (io::Result<usize>, Vec<T>, Option<U>);
 
     fn complete(self, cqe: CqeResult) -> (io::Result<usize>, Vec<T>, Option<U>) {
-        let flags = cqe.flags;
-        let result = cqe.result;
-        tracing::trace!("Complete: flags {flags}");
-        tracing::trace!("Update: flags {flags}, res {result:?}");
         // Convert the operation result to `usize`, and add previous byte count
-        let res = result.map(|v| self.bytes + v as usize);
+        let res = cqe.result.map(|v| self.bytes + v as usize);
 
         // Recover the data buffers.
         let io_bufs = self.io_bufs;
@@ -117,9 +113,6 @@ impl<T, U> Completable for SendMsgZc<T, U> {
 impl<T, U> Updateable for SendMsgZc<T, U> {
     fn update(&mut self, cqe: CqeResult) {
         // uring send_zc promises there will be no error on CQE's marked more
-        let flags = cqe.flags;
-        let result = cqe.result;
-        tracing::trace!("Update: flags {flags}, res {result:?}");
-        self.bytes += result.unwrap_or_default() as usize;
+        self.bytes += cqe.result.unwrap_or_default() as usize;
     }
 }
