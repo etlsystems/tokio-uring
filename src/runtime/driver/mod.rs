@@ -40,6 +40,10 @@ impl Driver {
     pub(crate) fn new(b: &crate::Builder) -> io::Result<Driver> {
         let uring = b.urb.build(b.entries)?;
 
+        uring
+            .submitter()
+            .register_iowq_max_workers(&mut b.max_workers.clone())?;
+
         Ok(Driver {
             ops: Ops::new(),
             uring,
