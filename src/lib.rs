@@ -163,6 +163,7 @@ pub fn uring_builder() -> io_uring::Builder {
 // #[derive(Clone, Default)]
 pub struct Builder {
     entries: u32,
+    max_workers: [u32; 2],
     urb: io_uring::Builder,
 }
 
@@ -175,6 +176,7 @@ pub struct Builder {
 pub fn builder() -> Builder {
     Builder {
         entries: 256,
+        max_workers: [0; 2],
         urb: io_uring::IoUring::builder(),
     }
 }
@@ -188,6 +190,17 @@ impl Builder {
     /// This function will adjust the `cq_entries` value to be at least 2 times `sq_entries`
     pub fn entries(&mut self, sq_entries: u32) -> &mut Self {
         self.entries = sq_entries;
+        self
+    }
+
+    /// Get and/or set the limit for number of io_uring worker threads per NUMA
+    /// node. `bounded` holds the limit for bounded workers, which process I/O
+    /// operations expected to be bound in time, that is I/O on regular files or
+    /// block devices. While `unbounded` holds the limit for unbounded workers,
+    /// which carry out I/O operations that can never complete, for instance I/O
+    /// on sockets. Setting `None` leaves the default
+    pub fn max_workers(&mut self, bounded: Option<u32>, unbounded: Option<u32>) -> &mut Self {
+        self.max_workers = [bounded.unwrap_or_default(), unbounded.unwrap_or_default()];
         self
     }
 
