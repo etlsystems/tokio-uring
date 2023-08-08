@@ -138,10 +138,14 @@ impl Driver {
         ))
     }
 
-    pub(crate) fn submit_op_2(&mut self, sqe: squeue::Entry) -> usize {
+    pub(crate) fn submit_op_2<A>(&mut self, sqe: A) -> usize
+    where
+        A: Into<SEntry>,
+    {
         let index = self.ops.insert();
 
         // Configure the SQE
+        let sqe: SEntry = sqe.into();
         let sqe = sqe.user_data(index as _);
 
         // Push the new operation
