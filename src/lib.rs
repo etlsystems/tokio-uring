@@ -156,7 +156,7 @@ pub fn start<F: Future>(future: F) -> F::Output {
 /// having to use the io_uring crate as well. Refer to Builder::start example
 /// for its intended usage.
 pub fn uring_builder() -> io_uring::Builder<SEntry, CEntry> {
-    io_uring::IoUring::generic_builder()
+    io_uring::IoUring::builder()
 }
 
 /// Builder API that can create and start the `io_uring` runtime with non-default parameters,
@@ -178,7 +178,7 @@ pub fn builder() -> Builder {
     Builder {
         entries: 256,
         max_workers: [0; 2],
-        urb: io_uring::IoUring::generic_builder(),
+        urb: io_uring::IoUring::builder(),
     }
 }
 
