@@ -22,7 +22,7 @@ use std::task::{Context, Poll};
 
 use crate::buf::fixed::FixedBuffers;
 use crate::runtime::driver::op::{Completable, MultiCQEFuture, Op, Updateable};
-use crate::runtime::driver::Driver;
+use crate::runtime::driver::{Driver, SEntry};
 
 #[derive(Clone)]
 pub(crate) struct Handle {
@@ -67,10 +67,11 @@ impl Handle {
         self.inner.borrow_mut().submit_op_2(sqe)
     }
 
-    pub(crate) fn submit_op<T, S, F>(&self, data: T, f: F) -> io::Result<Op<T, S>>
+    pub(crate) fn submit_op<T, S, F, A>(&self, data: T, f: F) -> io::Result<Op<T, S>>
     where
         T: Completable,
-        F: FnOnce(&mut T) -> squeue::Entry,
+        A: Into<SEntry>,
+        F: FnOnce(&mut T) -> A,
     {
         self.inner.borrow_mut().submit_op(data, f, self.into())
     }
