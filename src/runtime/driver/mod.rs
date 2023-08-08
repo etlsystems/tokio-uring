@@ -514,9 +514,14 @@ impl Ops {
         self.lifecycle.remove(index);
     }
 
-    fn complete(&mut self, index: usize, cqe: cqueue::Entry) {
+    fn complete<A>(&mut self, index: usize, cqe: A)
+    where
+        A: Into<CEntry>,
+    {
         let completions = &mut self.completions;
-        if self.lifecycle[index].complete(completions, cqe) {
+        let cqe: CEntry = cqe.into();
+
+        if self.lifecycle[index].complete(completions, cqe.into()) {
             self.lifecycle.remove(index);
         }
     }
