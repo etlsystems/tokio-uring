@@ -50,6 +50,10 @@ impl Driver {
     pub(crate) fn new(b: &crate::Builder) -> io::Result<Driver> {
         let uring = b.urb.build(b.entries)?;
 
+        uring
+            .submitter()
+            .register_iowq_max_workers(&mut b.max_workers.clone())?;
+
         Ok(Driver {
             ops: Ops::new(),
             uring,
@@ -107,9 +111,11 @@ impl Driver {
         &mut self,
         buffers: Rc<RefCell<dyn FixedBuffers>>,
     ) -> io::Result<()> {
-        self.uring
-            .submitter()
-            .register_buffers(buffers.borrow().iovecs())?;
+        unsafe {
+            self.uring
+                .submitter()
+                .register_buffers(buffers.borrow().iovecs())?;
+        }
 
         self.fixed_buffers = Some(buffers);
         Ok(())
