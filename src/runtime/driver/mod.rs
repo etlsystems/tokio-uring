@@ -146,7 +146,7 @@ impl Driver {
 
         // Configure the SQE
         let sqe: SEntry = sqe.into();
-        let sqe = sqe.user_data(index as _);
+        let sqe: SEntry = sqe.user_data(index as _);
 
         // Push the new operation
         while unsafe { self.uring.submission().push(&sqe).is_err() } {
