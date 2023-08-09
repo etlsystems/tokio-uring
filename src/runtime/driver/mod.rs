@@ -172,7 +172,7 @@ impl Driver {
 
         // Configure the SQE
         let sqe: SEntry = f(&mut data).into();
-        let sqe = sqe.user_data(index as _);
+        let sqe: SEntry = sqe.user_data(index as _);
 
         // Create the operation
         let op = Op::new(handle, data, index);
