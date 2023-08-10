@@ -44,7 +44,7 @@ fn uring_cmd16() {
     }
 }
 
-#[cfg(feature = "sqe128")]
+//#[cfg(feature = "sqe128")]
 #[test]
 fn uring_cmd80() {
     tokio_uring::start(async {

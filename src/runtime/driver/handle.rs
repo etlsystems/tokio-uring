@@ -25,17 +25,17 @@ use crate::runtime::driver::op::{Completable, MultiCQEFuture, Op, Updateable};
 use crate::runtime::driver::{Driver, SEntry};
 
 #[derive(Clone)]
-pub(crate) struct Handle {
-    pub(super) inner: Rc<RefCell<Driver>>,
+pub(crate) struct Handle<S: squeue::EntryMarker, C: cqueue::EntryMarker> {
+    pub(super) inner: Rc<RefCell<Driver<S, C>>>,
 }
 
 #[derive(Clone)]
-pub(crate) struct WeakHandle {
-    inner: Weak<RefCell<Driver>>,
+pub(crate) struct WeakHandle<S: squeue::EntryMarker, C: cqueue::EntryMarker> {
+    inner: Weak<RefCell<Driver<S, C>>>,
 }
 
-impl Handle {
-    pub(crate) fn new(b: &crate::Builder) -> io::Result<Self> {
+impl<S, C> Handle<S, C> {
+    pub(crate) fn new(b: &crate::Builder<S, C>) -> io::Result<Self> {
         Ok(Self {
             inner: Rc::new(RefCell::new(Driver::new(b)?)),
         })
@@ -67,10 +67,10 @@ impl Handle {
         self.inner.borrow_mut().submit_op_2(sqe)
     }
 
-    pub(crate) fn submit_op<T, S, F, A>(&self, data: T, f: F) -> io::Result<Op<T, S>>
+    pub(crate) fn submit_op<T, U, F, A>(&self, data: T, f: F) -> io::Result<Op<T, U>>
     where
         T: Completable,
-        A: Into<SEntry>,
+        A: Into<S>,
         F: FnOnce(&mut T) -> A,
     {
         self.inner.borrow_mut().submit_op(data, f, self.into())
@@ -107,31 +107,31 @@ impl Handle {
     }
 }
 
-impl WeakHandle {
-    pub(crate) fn upgrade(&self) -> Option<Handle> {
+impl<S, C> WeakHandle<S, C> {
+    pub(crate) fn upgrade(&self) -> Option<Handle<S, C>> {
         Some(Handle {
             inner: self.inner.upgrade()?,
         })
     }
 }
 
-impl AsRawFd for Handle {
+impl<S, C> AsRawFd for Handle<S, C> {
     fn as_raw_fd(&self) -> RawFd {
         self.inner.borrow().uring.as_raw_fd()
     }
 }
 
-impl From<Driver> for Handle {
-    fn from(driver: Driver) -> Self {
+impl<S, C> From<Driver<S, C>> for Handle<S, C> {
+    fn from(driver: Driver<S, C>) -> Self {
         Self {
             inner: Rc::new(RefCell::new(driver)),
         }
     }
 }
 
-impl<T> From<T> for WeakHandle
+impl<T, S, C> From<T> for WeakHandle<S, C>
 where
-    T: Deref<Target = Handle>,
+    T: Deref<Target = Handle<S, C>>,
 {
     fn from(handle: T) -> Self {
         Self {

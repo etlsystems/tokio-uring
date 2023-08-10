@@ -79,6 +79,7 @@ pub mod fs;
 pub mod net;
 
 pub use io::write::*;
+use io_uring::{cqueue, squeue};
 pub use runtime::driver::op::{InFlightOneshot, OneshotOutputTransform, UnsubmittedOneshot};
 pub use runtime::spawn;
 pub use runtime::Runtime;
@@ -155,17 +156,17 @@ pub fn start<F: Future>(future: F) -> F::Output {
 /// This function is provided to avoid requiring the user of this crate from
 /// having to use the io_uring crate as well. Refer to Builder::start example
 /// for its intended usage.
-pub fn uring_builder() -> io_uring::Builder<SEntry, CEntry> {
+pub fn uring_builder<S: squeue::EntryMarker, C: cqueue::EntryMarker>() -> io_uring::Builder<S, C> {
     io_uring::IoUring::builder()
 }
 
 /// Builder API that can create and start the `io_uring` runtime with non-default parameters,
 /// while abstracting away the underlying io_uring crate.
 // #[derive(Clone, Default)]
-pub struct Builder {
+pub struct Builder<S, C> {
     entries: u32,
     max_workers: [u32; 2],
-    urb: io_uring::Builder<SEntry, CEntry>,
+    urb: io_uring::Builder<S, C>,
 }
 
 /// Constructs a [`Builder`] with default settings.
@@ -174,7 +175,7 @@ pub struct Builder {
 /// Runtime.
 ///
 /// Refer to [`Builder::start`] for an example.
-pub fn builder() -> Builder {
+pub fn builder<S: squeue::EntryMarker, C: cqueue::EntryMarker>() -> Builder<S, C> {
     Builder {
         entries: 256,
         max_workers: [0; 2],
@@ -182,7 +183,7 @@ pub fn builder() -> Builder {
     }
 }
 
-impl Builder {
+impl<S, C> Builder<S, C> {
     /// Sets the number of Submission Queue entries in uring.
     ///
     /// The default value is 256.

@@ -188,7 +188,7 @@ impl File {
         op.await
     }
 
-    #[cfg(feature = "sqe128")]
+    //#[cfg(feature = "sqe128")]
     /// A file/device-specific 80-byte command, akin (but not equivalent) to ioctl(2).
     pub async fn uring_cmd80(&self, cmd_op: u32, cmd: [u8; 80]) -> io::Result<u32> {
         let op = Op::uring_cmd80(&self.fd, cmd_op, cmd).unwrap();

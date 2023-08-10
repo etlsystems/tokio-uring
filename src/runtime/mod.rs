@@ -1,3 +1,4 @@
+use io_uring::{cqueue, squeue};
 use std::future::Future;
 use std::io;
 use std::mem::ManuallyDrop;
@@ -10,7 +11,7 @@ pub(crate) mod driver;
 pub(crate) use context::RuntimeContext;
 
 thread_local! {
-    pub(crate) static CONTEXT: RuntimeContext = RuntimeContext::new();
+    pub(crate) static CONTEXT: RuntimeContext<S, C> = RuntimeContext::new<S, C>();
 }
 
 /// The Runtime Executor
@@ -21,7 +22,7 @@ thread_local! {
 /// This executes futures and tasks within the current-thread only.
 ///
 /// [`Runtime`]: tokio::runtime::Runtime
-pub struct Runtime {
+pub struct Runtime<S: squeue::EntryMarker, C: cqueue::EntryMarker> {
     /// Tokio runtime, always current-thread
     tokio_rt: ManuallyDrop<tokio::runtime::Runtime>,
 
@@ -29,7 +30,7 @@ pub struct Runtime {
     local: ManuallyDrop<LocalSet>,
 
     /// Strong reference to the driver.
-    driver: driver::Handle,
+    driver: driver::Handle<S, C>,
 }
 
 /// Spawns a new asynchronous task, returning a [`JoinHandle`] for it.
@@ -62,11 +63,11 @@ pub fn spawn<T: Future + 'static>(task: T) -> tokio::task::JoinHandle<T::Output>
     tokio::task::spawn_local(task)
 }
 
-impl Runtime {
+impl<S, C> Runtime<S, C> {
     /// Creates a new tokio_uring runtime on the current thread.
     ///
     /// This takes the tokio-uring [`Builder`](crate::Builder) as a parameter.
-    pub fn new(b: &crate::Builder) -> io::Result<Runtime> {
+    pub fn new(b: &crate::Builder<S, C>) -> io::Result<Runtime> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .on_thread_park(|| {
                 CONTEXT.with(|x| {
@@ -136,7 +137,7 @@ impl Runtime {
     }
 }
 
-impl Drop for Runtime {
+impl<S, C> Drop for Runtime<S, C> {
     fn drop(&mut self) {
         // drop tasks in correct order
         unsafe {
@@ -157,7 +158,9 @@ fn start_uring_wakes_task(
     local.spawn_local(drive_uring_wakes(async_driver_handle));
 }
 
-async fn drive_uring_wakes(driver: AsyncFd<driver::Handle>) {
+async fn drive_uring_wakes<S: squeue::EntryMarker, C: cqueue::EntryMarker>(
+    driver: AsyncFd<driver::Handle<S, C>>,
+) {
     loop {
         // Wait for read-readiness
         let mut guard = driver.readable().await.unwrap();

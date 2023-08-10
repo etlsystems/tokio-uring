@@ -24,12 +24,12 @@ pub(crate) type CEntry = cqueue::Entry32;
 mod handle;
 pub(crate) mod op;
 
-pub(crate) struct Driver {
+pub(crate) struct Driver<S: squeue::EntryMarker, C: cqueue::EntryMarker> {
     /// In-flight operations
     ops: Ops,
 
     /// IoUring bindings
-    uring: IoUring<SEntry, CEntry>,
+    uring: IoUring<S, C>,
 
     /// Reference to the currently registered buffers.
     /// Ensures that the buffers are not dropped until
@@ -46,8 +46,8 @@ struct Ops {
     completions: Slab<op::Completion>,
 }
 
-impl Driver {
-    pub(crate) fn new(b: &crate::Builder) -> io::Result<Driver> {
+impl<S, C> Driver<S, C> {
+    pub(crate) fn new(b: &crate::Builder<S, C>) -> io::Result<Driver<S, C>> {
         let uring = b.urb.build(b.entries)?;
 
         uring
@@ -157,12 +157,12 @@ impl Driver {
         index
     }
 
-    pub(crate) fn submit_op<T, S, F, A>(
+    pub(crate) fn submit_op<T, U, F, A>(
         &mut self,
         mut data: T,
         f: F,
-        handle: WeakHandle,
-    ) -> io::Result<Op<T, S>>
+        handle: WeakHandle<S, C>,
+    ) -> io::Result<Op<T, U>>
     where
         T: Completable,
         A: Into<SEntry>,
@@ -379,7 +379,7 @@ impl Driver {
     }
 }
 
-impl AsRawFd for Driver {
+impl<S, C> AsRawFd for Driver<S, C> {
     fn as_raw_fd(&self) -> RawFd {
         self.uring.as_raw_fd()
     }
@@ -395,7 +395,7 @@ impl AsRawFd for Driver {
 /// This depends on us knowing when ops are completed and done firing.
 /// When multishot ops are added (support exists but none are implemented), a way to know if such
 /// an op is finished MUST be added, otherwise our shutdown process is unsound.
-impl Drop for Driver {
+impl<S, C> Drop for Driver<S, C> {
     fn drop(&mut self) {
         // get all ops in flight for cancellation
         while !self.uring.submission().is_empty() {

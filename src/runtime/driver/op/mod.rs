@@ -27,7 +27,7 @@ pub struct UnsubmittedOneshot<D: 'static, T: OneshotOutputTransform<StoredData =
     sqe: squeue::Entry,
 }
 
-impl<D, T: OneshotOutputTransform<StoredData = D>> UnsubmittedOneshot<D, T> {
+impl<S, C, D, T: OneshotOutputTransform<StoredData = D>> UnsubmittedOneshot<D, T> {
     /// Construct a new operation for later submission.
     pub fn new(stable_data: D, post_op: T, sqe: squeue::Entry) -> Self {
         Self {
@@ -46,7 +46,7 @@ impl<D, T: OneshotOutputTransform<StoredData = D>> UnsubmittedOneshot<D, T> {
         self.submit_with_driver(&handle)
     }
 
-    fn submit_with_driver(self, driver: &driver::Handle) -> InFlightOneshot<D, T> {
+    fn submit_with_driver(self, driver: &driver::Handle<S, C>) -> InFlightOneshot<D, T> {
         let index = driver.submit_op_2(self.sqe);
 
         let driver = driver.into();
@@ -125,8 +125,13 @@ pub trait OneshotOutputTransform {
 }
 
 /// In-flight operation
-pub(crate) struct Op<T: 'static, CqeType = SingleCQE> {
-    driver: driver::WeakHandle,
+pub(crate) struct Op<
+    T: 'static,
+    CqeType = SingleCQE,
+    S: squeue::EntryMarker = squeue::Entry,
+    C: cqueue::EntryMarker = cqueue::Entry,
+> {
+    driver: driver::WeakHandle<S, C>,
     // Operation index in the slab
     index: usize,
 
@@ -207,9 +212,9 @@ impl From<cqueue::Entry32> for CqeResult {
     }
 }
 
-impl<T, CqeType> Op<T, CqeType> {
+impl<T, CqeType, S, C> Op<T, CqeType> {
     /// Create a new operation
-    pub(super) fn new(driver: driver::WeakHandle, data: T, index: usize) -> Self {
+    pub(super) fn new(driver: driver::WeakHandle<S, C>, data: T, index: usize) -> Self {
         Op {
             driver,
             index,

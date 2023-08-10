@@ -40,7 +40,7 @@ impl Completable for UringCmd16 {
     }
 }
 
-#[cfg(feature = "sqe128")]
+//#[cfg(feature = "sqe128")]
 pub(crate) struct UringCmd80 {
     /// Holds a strong ref to the FD, preventing the file from being closed
     /// while the operation is in-flight.
@@ -48,7 +48,7 @@ pub(crate) struct UringCmd80 {
     fd: SharedFd,
 }
 
-#[cfg(feature = "sqe128")]
+//#[cfg(feature = "sqe128")]
 impl Op<UringCmd80> {
     /// A file/device-specific 80-byte command, akin (but not equivalent) to ioctl
     pub(crate) fn uring_cmd80(
@@ -71,7 +71,7 @@ impl Op<UringCmd80> {
     }
 }
 
-#[cfg(feature = "sqe128")]
+//#[cfg(feature = "sqe128")]
 impl Completable for UringCmd80 {
     type Output = io::Result<u32>;
 
