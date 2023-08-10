@@ -11,7 +11,7 @@ pub(crate) mod driver;
 pub(crate) use context::RuntimeContext;
 
 thread_local! {
-    pub(crate) static CONTEXT: RuntimeContext<S, C> = RuntimeContext::new<S, C>();
+    pub(crate) static CONTEXT: RuntimeContext<squeue::Entry, cqueue::Entry> = RuntimeContext::new();
 }
 
 /// The Runtime Executor
@@ -63,11 +63,11 @@ pub fn spawn<T: Future + 'static>(task: T) -> tokio::task::JoinHandle<T::Output>
     tokio::task::spawn_local(task)
 }
 
-impl<S, C> Runtime<S, C> {
+impl<S: squeue::EntryMarker, C: cqueue::EntryMarker> Runtime<S, C> {
     /// Creates a new tokio_uring runtime on the current thread.
     ///
     /// This takes the tokio-uring [`Builder`](crate::Builder) as a parameter.
-    pub fn new(b: &crate::Builder<S, C>) -> io::Result<Runtime> {
+    pub fn new(b: &crate::Builder<S, C>) -> io::Result<Runtime<S, C>> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .on_thread_park(|| {
                 CONTEXT.with(|x| {
@@ -137,7 +137,7 @@ impl<S, C> Runtime<S, C> {
     }
 }
 
-impl<S, C> Drop for Runtime<S, C> {
+impl<S: squeue::EntryMarker, C: cqueue::EntryMarker> Drop for Runtime<S, C> {
     fn drop(&mut self) {
         // drop tasks in correct order
         unsafe {
@@ -147,10 +147,10 @@ impl<S, C> Drop for Runtime<S, C> {
     }
 }
 
-fn start_uring_wakes_task(
+fn start_uring_wakes_task<S: squeue::EntryMarker, C: cqueue::EntryMarker>(
     tokio_rt: &tokio::runtime::Runtime,
     local: &LocalSet,
-    driver: driver::Handle,
+    driver: driver::Handle<S, C>,
 ) {
     let _guard = tokio_rt.enter();
     let async_driver_handle = AsyncFd::new(driver).unwrap();
@@ -179,7 +179,7 @@ mod test {
 
     #[test]
     fn block_on() {
-        let rt = Runtime::new(&builder()).unwrap();
+        let rt: Runtime<S, C> = Runtime::new(&builder()).unwrap();
         rt.block_on(async move { () });
     }
 

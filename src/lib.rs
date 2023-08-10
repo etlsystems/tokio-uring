@@ -145,8 +145,8 @@ use std::future::Future;
 ///     })
 /// }
 /// ```
-pub fn start<F: Future>(future: F) -> F::Output {
-    let rt = runtime::Runtime::new(&builder()).unwrap();
+pub fn start<F: Future, S: squeue::EntryMarker, C: cqueue::EntryMarker>(future: F) -> F::Output {
+    let rt: Runtime<S, C> = runtime::Runtime::new(&builder()).unwrap();
     rt.block_on(future)
 }
 
@@ -163,7 +163,7 @@ pub fn uring_builder<S: squeue::EntryMarker, C: cqueue::EntryMarker>() -> io_uri
 /// Builder API that can create and start the `io_uring` runtime with non-default parameters,
 /// while abstracting away the underlying io_uring crate.
 // #[derive(Clone, Default)]
-pub struct Builder<S, C> {
+pub struct Builder<S: squeue::EntryMarker, C: cqueue::EntryMarker> {
     entries: u32,
     max_workers: [u32; 2],
     urb: io_uring::Builder<S, C>,
@@ -183,7 +183,7 @@ pub fn builder<S: squeue::EntryMarker, C: cqueue::EntryMarker>() -> Builder<S, C
     }
 }
 
-impl<S, C> Builder<S, C> {
+impl<S: squeue::EntryMarker, C: cqueue::EntryMarker> Builder<S, C> {
     /// Sets the number of Submission Queue entries in uring.
     ///
     /// The default value is 256.
@@ -211,7 +211,7 @@ impl<S, C> Builder<S, C> {
     ///
     /// Refer to the Builder start method for an example.
     /// Refer to the io_uring::builder documentation for all the supported methods.
-    pub fn uring_builder(&mut self, b: &io_uring::Builder<SEntry, CEntry>) -> &mut Self {
+    pub fn uring_builder(&mut self, b: &io_uring::Builder<S, C>) -> &mut Self {
         self.urb = b.clone();
         self
     }

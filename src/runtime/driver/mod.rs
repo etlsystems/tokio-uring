@@ -46,7 +46,7 @@ struct Ops {
     completions: Slab<op::Completion>,
 }
 
-impl<S, C> Driver<S, C> {
+impl<S: squeue::EntryMarker, C: cqueue::EntryMarker> Driver<S, C> {
     pub(crate) fn new(b: &crate::Builder<S, C>) -> io::Result<Driver<S, C>> {
         let uring = b.urb.build(b.entries)?;
 
@@ -138,14 +138,11 @@ impl<S, C> Driver<S, C> {
         ))
     }
 
-    pub(crate) fn submit_op_2<A>(&mut self, sqe: A) -> usize
-    where
-        A: Into<SEntry>,
-    {
+    pub(crate) fn submit_op_2(&mut self, sqe: S) -> usize {
         let index = self.ops.insert();
 
         // Configure the SQE
-        let sqe: SEntry = sqe.into();
+        //let sqe: SEntry = sqe.into();
         let sqe: SEntry = sqe.user_data(index as _);
 
         // Push the new operation
@@ -165,14 +162,14 @@ impl<S, C> Driver<S, C> {
     ) -> io::Result<Op<T, U>>
     where
         T: Completable,
-        A: Into<SEntry>,
+        A: squeue::EntryMarker,
         F: FnOnce(&mut T) -> A,
     {
         let index = self.ops.insert();
 
         // Configure the SQE
-        let sqe: SEntry = f(&mut data).into();
-        let sqe: SEntry = sqe.user_data(index as _);
+        let sqe: A = f(&mut data).into();
+        let sqe: A = sqe.user_data(index as _);
 
         // Create the operation
         let op = Op::new(handle, data, index);
@@ -379,7 +376,7 @@ impl<S, C> Driver<S, C> {
     }
 }
 
-impl<S, C> AsRawFd for Driver<S, C> {
+impl<S: squeue::EntryMarker, C: cqueue::EntryMarker> AsRawFd for Driver<S, C> {
     fn as_raw_fd(&self) -> RawFd {
         self.uring.as_raw_fd()
     }
@@ -395,7 +392,7 @@ impl<S, C> AsRawFd for Driver<S, C> {
 /// This depends on us knowing when ops are completed and done firing.
 /// When multishot ops are added (support exists but none are implemented), a way to know if such
 /// an op is finished MUST be added, otherwise our shutdown process is unsound.
-impl<S, C> Drop for Driver<S, C> {
+impl<S: squeue::EntryMarker, C: cqueue::EntryMarker> Drop for Driver<S, C> {
     fn drop(&mut self) {
         // get all ops in flight for cancellation
         while !self.uring.submission().is_empty() {

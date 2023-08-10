@@ -34,7 +34,7 @@ pub(crate) struct WeakHandle<S: squeue::EntryMarker, C: cqueue::EntryMarker> {
     inner: Weak<RefCell<Driver<S, C>>>,
 }
 
-impl<S, C> Handle<S, C> {
+impl<S: squeue::EntryMarker, C: cqueue::EntryMarker> Handle<S, C> {
     pub(crate) fn new(b: &crate::Builder<S, C>) -> io::Result<Self> {
         Ok(Self {
             inner: Rc::new(RefCell::new(Driver::new(b)?)),
@@ -107,7 +107,7 @@ impl<S, C> Handle<S, C> {
     }
 }
 
-impl<S, C> WeakHandle<S, C> {
+impl<S: squeue::EntryMarker, C: cqueue::EntryMarker> WeakHandle<S, C> {
     pub(crate) fn upgrade(&self) -> Option<Handle<S, C>> {
         Some(Handle {
             inner: self.inner.upgrade()?,
@@ -115,13 +115,13 @@ impl<S, C> WeakHandle<S, C> {
     }
 }
 
-impl<S, C> AsRawFd for Handle<S, C> {
+impl<S: squeue::EntryMarker, C: cqueue::EntryMarker> AsRawFd for Handle<S, C> {
     fn as_raw_fd(&self) -> RawFd {
         self.inner.borrow().uring.as_raw_fd()
     }
 }
 
-impl<S, C> From<Driver<S, C>> for Handle<S, C> {
+impl<S: squeue::EntryMarker, C: cqueue::EntryMarker> From<Driver<S, C>> for Handle<S, C> {
     fn from(driver: Driver<S, C>) -> Self {
         Self {
             inner: Rc::new(RefCell::new(driver)),
@@ -129,7 +129,7 @@ impl<S, C> From<Driver<S, C>> for Handle<S, C> {
     }
 }
 
-impl<T, S, C> From<T> for WeakHandle<S, C>
+impl<T, S: squeue::EntryMarker, C: cqueue::EntryMarker> From<T> for WeakHandle<S, C>
 where
     T: Deref<Target = Handle<S, C>>,
 {

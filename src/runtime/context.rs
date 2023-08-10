@@ -8,7 +8,7 @@ pub(crate) struct RuntimeContext<S: squeue::EntryMarker, C: cqueue::EntryMarker>
     driver: RefCell<Option<driver::Handle<S, C>>>,
 }
 
-impl<S, C> RuntimeContext<S, C> {
+impl<S: squeue::EntryMarker, C: cqueue::EntryMarker> RuntimeContext<S, C> {
     /// Construct the context with an uninitialized driver.
     pub(crate) const fn new() -> Self {
         Self {

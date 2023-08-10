@@ -21,19 +21,32 @@ use crate::runtime::{driver, CONTEXT};
 pub(crate) type Completion = SlabListEntry<CqeResult>;
 
 /// An unsubmitted oneshot operation.
-pub struct UnsubmittedOneshot<D: 'static, T: OneshotOutputTransform<StoredData = D>> {
+pub struct UnsubmittedOneshot<
+    D: 'static,
+    T: OneshotOutputTransform<StoredData = D>,
+    S: squeue::EntryMarker = squeue::Entry,
+    C: cqueue::EntryMarker = cqueue::Entry,
+> {
     stable_data: D,
     post_op: T,
-    sqe: squeue::Entry,
+    sqe: S,
+    phantom: std::marker::PhantomData<C>,
 }
 
-impl<S, C, D, T: OneshotOutputTransform<StoredData = D>> UnsubmittedOneshot<D, T> {
+impl<
+        D,
+        T: OneshotOutputTransform<StoredData = D>,
+        S: squeue::EntryMarker,
+        C: cqueue::EntryMarker,
+    > UnsubmittedOneshot<D, T, S, C>
+{
     /// Construct a new operation for later submission.
-    pub fn new(stable_data: D, post_op: T, sqe: squeue::Entry) -> Self {
+    pub fn new(stable_data: D, post_op: T, sqe: S) -> Self {
         Self {
             stable_data,
             post_op,
             sqe,
+            phantom: PhantomData,
         }
     }
 
@@ -67,8 +80,13 @@ pub struct InFlightOneshot<D: 'static, T: OneshotOutputTransform<StoredData = D>
     inner: Option<InFlightOneshotInner<D, T>>,
 }
 
-struct InFlightOneshotInner<D, T: OneshotOutputTransform<StoredData = D>> {
-    driver: driver::WeakHandle,
+struct InFlightOneshotInner<
+    D,
+    T: OneshotOutputTransform<StoredData = D>,
+    S: squeue::EntryMarker = squeue::Entry,
+    C: cqueue::EntryMarker = cqueue::Entry,
+> {
+    driver: driver::WeakHandle<S, C>,
     index: usize,
     stable_data: D,
     post_op: T,
@@ -212,7 +230,7 @@ impl From<cqueue::Entry32> for CqeResult {
     }
 }
 
-impl<T, CqeType, S, C> Op<T, CqeType> {
+impl<T, CqeType, S: squeue::EntryMarker, C: cqueue::EntryMarker> Op<T, CqeType, S, C> {
     /// Create a new operation
     pub(super) fn new(driver: driver::WeakHandle<S, C>, data: T, index: usize) -> Self {
         Op {
@@ -268,7 +286,7 @@ where
 /// To manage this, the lifecycle associated with the Op may if required
 /// be placed in LifeCycle::Ignored state to handle cqe's which arrive after
 /// the Op has been dropped.
-impl<T, CqeType> Drop for Op<T, CqeType> {
+impl<T, CqeType, S: squeue::EntryMarker, C: cqueue::EntryMarker> Drop for Op<T, CqeType, S, C> {
     fn drop(&mut self) {
         self.driver
             .upgrade()
