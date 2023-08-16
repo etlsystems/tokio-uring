@@ -183,8 +183,16 @@ impl File {
     }
 
     /// A file/device-specific 16-byte command, akin (but not equivalent) to ioctl(2).
-    pub async fn uring_cmd16(&self, cmd_op: u32, cmd: [u8; 16]) -> io::Result<u32> {
-        let op = Op::uring_cmd16(&self.fd, cmd_op, cmd).unwrap();
+    ///
+    /// Marked as unsafe, as it is the callers responsibility to ensure that any data which is required
+    /// to be stable is either passed in as the metadata argument, or otherwise stable through the life of the operation
+    pub async unsafe fn uring_cmd16<T: std::marker::Unpin>(
+        &self,
+        cmd_op: u32,
+        cmd: [u8; 16],
+        metadata: T,
+    ) -> (io::Result<u32>, T) {
+        let op = Op::uring_cmd16(&self.fd, cmd_op, cmd, metadata).unwrap();
         op.await
     }
 
