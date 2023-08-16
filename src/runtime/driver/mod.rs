@@ -11,6 +11,16 @@ use std::{io, mem};
 
 pub(crate) use handle::*;
 
+#[cfg(not(feature = "sqe128"))]
+pub(crate) type SEntry = squeue::Entry;
+#[cfg(feature = "sqe128")]
+pub(crate) type SEntry = squeue::Entry128;
+
+#[cfg(not(feature = "cqe32"))]
+pub(crate) type CEntry = cqueue::Entry;
+#[cfg(feature = "cqe32")]
+pub(crate) type CEntry = cqueue::Entry32;
+
 mod handle;
 pub(crate) mod op;
 
@@ -19,7 +29,7 @@ pub(crate) struct Driver {
     ops: Ops,
 
     /// IoUring bindings
-    uring: IoUring,
+    uring: IoUring<SEntry, CEntry>,
 
     /// Reference to the currently registered buffers.
     /// Ensures that the buffers are not dropped until
@@ -39,6 +49,10 @@ struct Ops {
 impl Driver {
     pub(crate) fn new(b: &crate::Builder) -> io::Result<Driver> {
         let uring = b.urb.build(b.entries)?;
+
+        uring
+            .submitter()
+            .register_iowq_max_workers(&mut b.max_workers.clone())?;
 
         Ok(Driver {
             ops: Ops::new(),
@@ -97,9 +111,11 @@ impl Driver {
         &mut self,
         buffers: Rc<RefCell<dyn FixedBuffers>>,
     ) -> io::Result<()> {
-        self.uring
-            .submitter()
-            .register_buffers(buffers.borrow().iovecs())?;
+        unsafe {
+            self.uring
+                .submitter()
+                .register_buffers(buffers.borrow().iovecs())?;
+        }
 
         self.fixed_buffers = Some(buffers);
         Ok(())
@@ -122,11 +138,15 @@ impl Driver {
         ))
     }
 
-    pub(crate) fn submit_op_2(&mut self, sqe: squeue::Entry) -> usize {
+    pub(crate) fn submit_op_2<A>(&mut self, sqe: A) -> usize
+    where
+        A: Into<SEntry>,
+    {
         let index = self.ops.insert();
 
         // Configure the SQE
-        let sqe = sqe.user_data(index as _);
+        let sqe: SEntry = sqe.into();
+        let sqe: SEntry = sqe.user_data(index as _);
 
         // Push the new operation
         while unsafe { self.uring.submission().push(&sqe).is_err() } {
@@ -137,7 +157,7 @@ impl Driver {
         index
     }
 
-    pub(crate) fn submit_op<T, S, F>(
+    pub(crate) fn submit_op<T, S, F, A>(
         &mut self,
         mut data: T,
         f: F,
@@ -145,12 +165,14 @@ impl Driver {
     ) -> io::Result<Op<T, S>>
     where
         T: Completable,
-        F: FnOnce(&mut T) -> squeue::Entry,
+        A: Into<SEntry>,
+        F: FnOnce(&mut T) -> A,
     {
         let index = self.ops.insert();
 
         // Configure the SQE
-        let sqe = f(&mut data).user_data(index as _);
+        let sqe: SEntry = f(&mut data).into();
+        let sqe: SEntry = sqe.user_data(index as _);
 
         // Create the operation
         let op = Op::new(handle, data, index);
@@ -413,7 +435,15 @@ impl Drop for Driver {
                     while self
                         .uring
                         .submission()
-                        .push(&AsyncCancel::new(id as u64).build().user_data(u64::MAX))
+                        .push(
+                            // Conversion to configured squeue::EntryMarker is useless when
+                            // sqe128 feature is disabled.
+                            #[allow(clippy::useless_conversion)]
+                            &AsyncCancel::new(id as u64)
+                                .build()
+                                .user_data(u64::MAX)
+                                .into(),
+                        )
                         .is_err()
                     {
                         self.uring
@@ -484,9 +514,14 @@ impl Ops {
         self.lifecycle.remove(index);
     }
 
-    fn complete(&mut self, index: usize, cqe: cqueue::Entry) {
+    fn complete<A>(&mut self, index: usize, cqe: A)
+    where
+        A: Into<CEntry>,
+    {
         let completions = &mut self.completions;
-        if self.lifecycle[index].complete(completions, cqe) {
+        let cqe: CEntry = cqe.into();
+
+        if self.lifecycle[index].complete(completions, cqe.into()) {
             self.lifecycle.remove(index);
         }
     }

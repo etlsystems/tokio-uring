@@ -84,6 +84,7 @@ pub use runtime::spawn;
 pub use runtime::Runtime;
 
 use crate::runtime::driver::op::Op;
+use crate::runtime::driver::{CEntry, SEntry};
 use std::future::Future;
 
 /// Starts an `io_uring` enabled Tokio runtime.
@@ -154,7 +155,7 @@ pub fn start<F: Future>(future: F) -> F::Output {
 /// This function is provided to avoid requiring the user of this crate from
 /// having to use the io_uring crate as well. Refer to Builder::start example
 /// for its intended usage.
-pub fn uring_builder() -> io_uring::Builder {
+pub fn uring_builder() -> io_uring::Builder<SEntry, CEntry> {
     io_uring::IoUring::builder()
 }
 
@@ -163,7 +164,8 @@ pub fn uring_builder() -> io_uring::Builder {
 // #[derive(Clone, Default)]
 pub struct Builder {
     entries: u32,
-    urb: io_uring::Builder,
+    max_workers: [u32; 2],
+    urb: io_uring::Builder<SEntry, CEntry>,
 }
 
 /// Constructs a [`Builder`] with default settings.
@@ -175,6 +177,7 @@ pub struct Builder {
 pub fn builder() -> Builder {
     Builder {
         entries: 256,
+        max_workers: [0; 2],
         urb: io_uring::IoUring::builder(),
     }
 }
@@ -191,11 +194,23 @@ impl Builder {
         self
     }
 
+    /// Get and/or set the limit for number of io_uring worker threads per NUMA
+    /// node. `bounded` holds the limit for bounded workers, which process I/O
+    /// operations expected to be bound in time, that is I/O on regular files or
+    /// block devices. While `unbounded` holds the limit for unbounded workers,
+    /// which carry out I/O operations that can never complete, for instance I/O
+    /// on sockets. Setting `None` leaves the default
+    pub fn max_workers(&mut self, bounded: Option<u32>, unbounded: Option<u32>) -> &mut Self {
+        self.max_workers = [bounded.unwrap_or_default(), unbounded.unwrap_or_default()];
+        self
+    }
+
     /// Replaces the default [`io_uring::Builder`], which controls the settings for the
     /// inner `io_uring` API.
     ///
-    /// Refer to the [`io_uring::Builder`] documentation for all the supported methods.
-    pub fn uring_builder(&mut self, b: &io_uring::Builder) -> &mut Self {
+    /// Refer to the Builder start method for an example.
+    /// Refer to the io_uring::builder documentation for all the supported methods.
+    pub fn uring_builder(&mut self, b: &io_uring::Builder<SEntry, CEntry>) -> &mut Self {
         self.urb = b.clone();
         self
     }
