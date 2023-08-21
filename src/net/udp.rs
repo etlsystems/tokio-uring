@@ -287,9 +287,10 @@ impl UdpSocket {
         io_slices: Vec<T>,
         socket_addr: Option<SocketAddr>,
         msg_control: Option<U>,
+        msg_flags: Option<u32>,
     ) -> (io::Result<usize>, Vec<T>, Option<U>) {
         self.inner
-            .sendmsg_zc(io_slices, socket_addr, msg_control)
+            .sendmsg_zc(io_slices, socket_addr, msg_control, msg_flags)
             .await
     }
 

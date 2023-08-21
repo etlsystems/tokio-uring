@@ -29,6 +29,7 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
         io_bufs: Vec<T>,
         socket_addr: Option<SocketAddr>,
         msg_control: Option<U>,
+        msg_flags: Option<u32>,
     ) -> io::Result<Self> {
         use io_uring::{opcode, types};
 
@@ -70,6 +71,11 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
             }
         }
 
+        let msg_flags = match msg_flags {
+            Some(flags) => flags,
+            None => 0,
+        };
+
         CONTEXT.with(|x| {
             x.handle().expect("Not in a runtime context").submit_op(
                 SendMsgZc {
@@ -86,6 +92,7 @@ impl<T: BoundedBuf, U: BoundedBuf> Op<SendMsgZc<T, U>, MultiCQEFuture> {
                         types::Fd(sendmsg_zc.fd.raw_fd()),
                         sendmsg_zc.msghdr.as_mut() as *const _,
                     )
+                    .flags(msg_flags)
                     .build()
                 },
             )
