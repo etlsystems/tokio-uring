@@ -2,6 +2,7 @@ use crate::buf::fixed::{handle::CheckedOutBuf, FixedBuffers};
 use crate::buf::IoBufMut;
 
 use libc::{iovec, UIO_MAXIOV};
+use log::info;
 use tokio::sync::Notify;
 
 use std::cmp;
@@ -143,6 +144,8 @@ impl<T: IoBufMut> Pool<T> {
             matches!(state, BufState::CheckedOut),
             "the buffer must be checked out"
         );
+
+        info!("check_in_internal - Reached check_in_internal()");
 
         // Link the buffer as the new head of the free list for its capacity.
         // Recently checked in buffers will be first to be reused,
