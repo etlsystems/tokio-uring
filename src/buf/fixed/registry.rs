@@ -1,5 +1,6 @@
 use super::plumbing;
 use super::FixedBuf;
+use super::FixedBuffers;
 
 use crate::buf::IoBufMut;
 use crate::runtime::CONTEXT;
@@ -171,5 +172,14 @@ impl<T: IoBufMut> FixedBufRegistry<T> {
             // plumbing::Registry::check_out
             unsafe { FixedBuf::new(registry, data) }
         })
+    }
+
+    /// Function to manually check in buffer.
+    pub fn check_in(&self, index: u16, init_len: usize) {
+        let mut inner = self.inner.borrow_mut();
+
+        unsafe {
+            inner.check_in(index, init_len);
+        }
     }
 }
