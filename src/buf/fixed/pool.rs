@@ -21,6 +21,8 @@ use std::io;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use log::warn;
+
 /// A dynamic collection of I/O buffers pre-registered with the kernel.
 ///
 /// `FixedBufPool` allows the application to manage a collection of buffers
@@ -260,7 +262,10 @@ impl<T: IoBufMut> FixedBufPool<T> {
                 // plumbing::Pool::try_next
                 let buf = unsafe { FixedBuf::new(Rc::clone(&self.inner) as _, data) };
                 return buf;
+            } else {
+                warn!("inner.try_next(cap) returned None");
             }
+
             inner.notify_on_next(cap)
         };
 
