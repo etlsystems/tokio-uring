@@ -2,6 +2,7 @@ use super::FixedBuffers;
 use crate::buf::{IoBuf, IoBufMut};
 
 use libc::iovec;
+use log::info;
 use std::cell::RefCell;
 use std::fmt::{self, Debug};
 use std::ops::{Deref, DerefMut};
@@ -37,6 +38,8 @@ pub struct FixedBuf {
 
 impl Drop for FixedBuf {
     fn drop(&mut self) {
+        info!("drop - Reached drop() in handle.rs");
+
         let mut registry = self.registry.borrow_mut();
         // Safety: the length of the initialized data in the buffer has been
         // maintained accordingly to the safety contracts on
