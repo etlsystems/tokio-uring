@@ -147,6 +147,11 @@ impl<T: IoBufMut> Pool<T> {
 
         info!("check_in_internal - Reached check_in_internal()");
 
+        info!(
+            "check_in_internal - called from {}",
+            std::backtrace::Backtrace::force_capture()
+        );
+
         // Link the buffer as the new head of the free list for its capacity.
         // Recently checked in buffers will be first to be reused,
         // improving cache locality.
