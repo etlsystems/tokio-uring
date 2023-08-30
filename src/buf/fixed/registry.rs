@@ -180,7 +180,7 @@ impl<T: IoBufMut> FixedBufRegistry<T> {
     pub fn check_in(&self, index: u16, init_len: usize) {
         let mut inner = self.inner.borrow_mut();
 
-        info!("check_in - Reached check_in() in registry.rs");
+        //info!("check_in - Reached check_in() in registry.rs");
 
         unsafe {
             inner.check_in(index, init_len);

@@ -38,7 +38,7 @@ pub struct FixedBuf {
 
 impl Drop for FixedBuf {
     fn drop(&mut self) {
-        info!("drop - Reached drop() in handle.rs");
+        //info!("drop - Reached drop() in handle.rs");
 
         let mut registry = self.registry.borrow_mut();
         // Safety: the length of the initialized data in the buffer has been

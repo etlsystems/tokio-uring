@@ -145,7 +145,7 @@ impl<T: IoBufMut> Pool<T> {
             "the buffer must be checked out"
         );
 
-        info!("check_in_internal - Reached check_in_internal()");
+        //info!("check_in_internal - Reached check_in_internal()");
 
         // Link the buffer as the new head of the free list for its capacity.
         // Recently checked in buffers will be first to be reused,
@@ -154,6 +154,7 @@ impl<T: IoBufMut> Pool<T> {
 
         *state = BufState::Free { init_len, next };
 
+        // What if we have
         if let Some(notify) = self.notify_next_by_cap.get(&cap) {
             // Wake up a single task pending on `next`
             notify.notify_one();
@@ -170,7 +171,7 @@ impl<T: IoBufMut> FixedBuffers for Pool<T> {
     }
 
     unsafe fn check_in(&mut self, index: u16, init_len: usize) {
-        info!("check_in - Reached check_in() in pool.rs");
+        //info!("check_in - Reached check_in() in pool.rs");
 
         self.check_in_internal(index, init_len)
     }
