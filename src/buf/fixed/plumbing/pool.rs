@@ -147,11 +147,6 @@ impl<T: IoBufMut> Pool<T> {
 
         info!("check_in_internal - Reached check_in_internal()");
 
-        info!(
-            "check_in_internal - called from {}",
-            std::backtrace::Backtrace::force_capture()
-        );
-
         // Link the buffer as the new head of the free list for its capacity.
         // Recently checked in buffers will be first to be reused,
         // improving cache locality.
@@ -175,6 +170,8 @@ impl<T: IoBufMut> FixedBuffers for Pool<T> {
     }
 
     unsafe fn check_in(&mut self, index: u16, init_len: usize) {
+        info!("check_in - Reached check_in() in pool.rs");
+
         self.check_in_internal(index, init_len)
     }
 }
