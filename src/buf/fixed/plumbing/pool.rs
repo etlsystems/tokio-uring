@@ -2,7 +2,7 @@ use crate::buf::fixed::{handle::CheckedOutBuf, FixedBuffers};
 use crate::buf::IoBufMut;
 
 use libc::{iovec, UIO_MAXIOV};
-use log::info;
+use log::{info, warn};
 use tokio::sync::Notify;
 
 use std::cmp;
@@ -95,7 +95,32 @@ impl<T: IoBufMut> Pool<T> {
     // If the free buffer list for this capacity is not empty, checks out the first buffer
     // from the list and returns its data. Otherwise, returns None.
     pub(crate) fn try_next(&mut self, cap: usize) -> Option<CheckedOutBuf> {
-        let free_head = self.free_buf_head_by_cap.get_mut(&cap)?;
+        let free_head = match self.free_buf_head_by_cap.get_mut(&cap) {
+            Some(_free_head) => _free_head,
+            None => {
+                warn!("try_next - No entry found in hashmap for this capacity");
+
+                let mut _free_head = None;
+
+                for (index, state) in self.states.iter().enumerate() {
+                    match state {
+                        BufState::CheckedOut => {}
+                        _ => {
+                            self.free_buf_head_by_cap.insert(cap, index as u16);
+
+                            _free_head = self.free_buf_head_by_cap.get_mut(&cap);
+                        }
+                    }
+                }
+
+                if let Some(__free_head) = _free_head {
+                    __free_head
+                } else {
+                    return None;
+                }
+            }
+        };
+
         let index = *free_head as usize;
         let state = &mut self.states[index];
 
