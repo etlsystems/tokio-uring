@@ -116,6 +116,7 @@ impl<T: IoBufMut> Pool<T> {
                 if let Some(__free_head) = _free_head {
                     __free_head
                 } else {
+                    warn!("try_next - All buffers in pool checked out.");
                     return None;
                 }
             }
