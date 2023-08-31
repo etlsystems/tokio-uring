@@ -105,7 +105,11 @@ impl<T: IoBufMut> Pool<T> {
                 for (index, state) in self.states.iter().enumerate() {
                     match state {
                         BufState::CheckedOut => {}
-                        _ => {
+                        BufState::Free { init_len, next } => {
+                            info!(
+                                "Found free buffer - init_len = {}, next = {:?}",
+                                init_len, next
+                            );
                             self.free_buf_head_by_cap.insert(cap, index as u16);
 
                             _free_head = self.free_buf_head_by_cap.get_mut(&cap);
