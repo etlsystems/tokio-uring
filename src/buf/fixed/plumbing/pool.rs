@@ -107,8 +107,8 @@ impl<T: IoBufMut> Pool<T> {
                         BufState::CheckedOut => {}
                         BufState::Free { init_len, next } => {
                             info!(
-                                "Found free buffer - init_len = {}, next = {:?}",
-                                init_len, next
+                                "Found free buffer at index {} - init_len = {}, next = {:?}",
+                                index, init_len, next
                             );
                             self.free_buf_head_by_cap.insert(cap, index as u16);
 
@@ -134,7 +134,7 @@ impl<T: IoBufMut> Pool<T> {
                 *state = BufState::CheckedOut;
                 (init_len, next)
             }
-            BufState::CheckedOut => panic!("buffer is checked out"),
+            BufState::CheckedOut => panic!("buffer at index {} is checked out", index),
         };
 
         // Update the head of the free list for this capacity.
