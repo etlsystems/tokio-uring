@@ -29,6 +29,8 @@ pub(crate) struct Pool<T: IoBufMut> {
     buffers: Vec<T>,
     // Used to notify tasks pending on `next`
     notify_next_by_cap: HashMap<usize, Arc<Notify>>,
+
+    state_change_mutex: std::sync::Mutex<i32>,
 }
 
 // State information of a buffer in the registry,
@@ -89,13 +91,18 @@ impl<T: IoBufMut> Pool<T> {
             free_buf_head_by_cap,
             buffers,
             notify_next_by_cap: HashMap::new(),
+            state_change_mutex: std::sync::Mutex::new(0),
         }
     }
 
     // If the free buffer list for this capacity is not empty, checks out the first buffer
     // from the list and returns its data. Otherwise, returns None.
     pub(crate) fn try_next(&mut self, cap: usize) -> Option<CheckedOutBuf> {
-        let free_head = match self.free_buf_head_by_cap.get_mut(&cap) {
+        let _ = self.state_change_mutex.lock();
+
+        let free_head = self.free_buf_head_by_cap.get_mut(&cap)?;
+
+        /*{
             Some(_free_head) => _free_head,
             None => {
                 warn!("try_next - No entry found in hashmap for this capacity");
@@ -124,7 +131,7 @@ impl<T: IoBufMut> Pool<T> {
                     return None;
                 }
             }
-        };
+        };*/
 
         let index = *free_head as usize;
         let state = &mut self.states[index];
@@ -174,6 +181,8 @@ impl<T: IoBufMut> Pool<T> {
             matches!(state, BufState::CheckedOut),
             "the buffer must be checked out"
         );
+
+        let _ = self.state_change_mutex.lock();
 
         //info!("check_in_internal - Reached check_in_internal()");
 
