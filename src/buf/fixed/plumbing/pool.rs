@@ -203,14 +203,22 @@ impl<T: IoBufMut> Pool<T> {
     pub fn check_buffer_states(&mut self) {
         let _ = self.state_change_mutex.lock();
 
+        info!(
+            "check_buffer_states - self.states.len() = {}",
+            self.states.len()
+        );
+
         for (index, state) in self.states.iter().enumerate() {
             match state {
                 BufState::CheckedOut => {
-                    info!("Status of buffer {}: checked out", index);
+                    info!(
+                        "check_buffer_states - Status of buffer {}: checked out",
+                        index
+                    );
                 }
                 BufState::Free { init_len, next } => {
                     info!(
-                        "Status of buffer {}: free - init_len = {}, next = {:?}",
+                        "check_buffer_states - Status of buffer {}: free - init_len = {}, next = {:?}",
                         index, init_len, next
                     );
                 }
