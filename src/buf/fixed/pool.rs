@@ -228,6 +228,12 @@ impl<T: IoBufMut> FixedBufPool<T> {
         inner.check_buffer_states();
     }
 
+    pub fn force_buffer_checkin(&self) {
+        let mut inner = self.inner.borrow_mut();
+
+        inner.force_buffer_checkin();
+    }
+
     /// Returns a buffer of requested capacity from this pool
     /// that is not currently owned by any other [`FixedBuf`] handle.
     /// If no such free buffer is available, returns `None`.

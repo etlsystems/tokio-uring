@@ -200,6 +200,14 @@ impl<T: IoBufMut> Pool<T> {
         }
     }
 
+    pub fn force_buffer_checkin(&mut self) {
+        let length = self.states.len();
+
+        for index in 0..length {
+            self.check_in_internal(index as u16, 0);
+        }
+    }
+
     pub fn check_buffer_states(&mut self) {
         let _ = self.state_change_mutex.lock();
 
