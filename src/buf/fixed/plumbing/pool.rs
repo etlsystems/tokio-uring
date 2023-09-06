@@ -2,7 +2,7 @@ use crate::buf::fixed::{handle::CheckedOutBuf, FixedBuffers};
 use crate::buf::IoBufMut;
 
 use libc::{iovec, UIO_MAXIOV};
-use log::{info, warn};
+use log::info;
 use tokio::sync::Notify;
 
 use std::cmp;
@@ -102,37 +102,6 @@ impl<T: IoBufMut> Pool<T> {
 
         let free_head = self.free_buf_head_by_cap.get_mut(&cap)?;
 
-        /*{
-            Some(_free_head) => _free_head,
-            None => {
-                warn!("try_next - No entry found in hashmap for this capacity");
-
-                let mut _free_head = None;
-
-                for (index, state) in self.states.iter().enumerate() {
-                    match state {
-                        BufState::CheckedOut => {}
-                        BufState::Free { init_len, next } => {
-                            info!(
-                                "Found free buffer at index {} - init_len = {}, next = {:?}",
-                                index, init_len, next
-                            );
-                            self.free_buf_head_by_cap.insert(cap, index as u16);
-
-                            _free_head = self.free_buf_head_by_cap.get_mut(&cap);
-                        }
-                    }
-                }
-
-                if let Some(__free_head) = _free_head {
-                    __free_head
-                } else {
-                    warn!("try_next - All buffers in pool checked out.");
-                    return None;
-                }
-            }
-        };*/
-
         let index = *free_head as usize;
         let state = &mut self.states[index];
 
@@ -183,8 +152,6 @@ impl<T: IoBufMut> Pool<T> {
         );
 
         let _ = self.state_change_mutex.lock();
-
-        //info!("check_in_internal - Reached check_in_internal()");
 
         // Link the buffer as the new head of the free list for its capacity.
         // Recently checked in buffers will be first to be reused,
@@ -244,8 +211,6 @@ impl<T: IoBufMut> FixedBuffers for Pool<T> {
     }
 
     unsafe fn check_in(&mut self, index: u16, init_len: usize) {
-        //info!("check_in - Reached check_in() in pool.rs");
-
         self.check_in_internal(index, init_len)
     }
 }

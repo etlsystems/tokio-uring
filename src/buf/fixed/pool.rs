@@ -274,9 +274,7 @@ impl<T: IoBufMut> FixedBufPool<T> {
                 // plumbing::Pool::try_next
                 let buf = unsafe { FixedBuf::new(Rc::clone(&self.inner) as _, data) };
                 return buf;
-            } /*else {
-                  warn!("inner.try_next(cap) returned None");
-              }*/
+            }
 
             inner.notify_on_next(cap)
         };
