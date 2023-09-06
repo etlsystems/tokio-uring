@@ -1,5 +1,3 @@
-use log::info;
-
 use super::plumbing;
 use super::FixedBuf;
 use super::FixedBuffers;
@@ -179,8 +177,6 @@ impl<T: IoBufMut> FixedBufRegistry<T> {
     /// Function to manually check in buffer.
     pub fn check_in(&self, index: u16, init_len: usize) {
         let mut inner = self.inner.borrow_mut();
-
-        //info!("check_in - Reached check_in() in registry.rs");
 
         unsafe {
             inner.check_in(index, init_len);

@@ -160,7 +160,6 @@ impl<T: IoBufMut> Pool<T> {
 
         *state = BufState::Free { init_len, next };
 
-        // What if we have
         if let Some(notify) = self.notify_next_by_cap.get(&cap) {
             // Wake up a single task pending on `next`
             notify.notify_one();
