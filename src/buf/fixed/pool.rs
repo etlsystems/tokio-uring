@@ -21,8 +21,6 @@ use std::io;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use log::warn;
-
 /// A dynamic collection of I/O buffers pre-registered with the kernel.
 ///
 /// `FixedBufPool` allows the application to manage a collection of buffers
