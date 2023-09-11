@@ -62,6 +62,7 @@ impl XdpSocket {
         let mut xsk = Box::new();
 
         // Set xdp_socket_config
+        set_socket_config()
 
         // Check if umem refcount
     }
@@ -81,6 +82,12 @@ impl XdpSocket {
         if (usr_cfg.libbpf_flags & !XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD) {
             return libc::EINVAL;
         }
+
+        cfg.rx_size = *usr_cfg.rx_size;
+        cfg.tx_size = *usr_cfg.tx_size;
+        cfg.libbpf_flags = *usr_cfg.libbpf_flags;
+        cfg.xdp_flags = *usr_cfg.xdp_flags;
+        cfg.bind_flags = *usr_cfg.bind_flags;
     }
 
     pub async fn sendmsg() {
