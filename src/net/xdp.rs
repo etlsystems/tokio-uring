@@ -23,6 +23,14 @@ pub struct xsk_ring_prod {}
 
 pub struct xsk_ring_cons {}
 
+pub struct xsk_umem_config {
+    pub fill_size: u32,
+    pub comp_size: u32,
+    pub frame_size: u32,
+    pub frame_headroom: u32,
+    pub flags: u32,
+}
+
 union xsk_socket_config_union {
     libbpf_flags: u32,
     libxdp_flags: u32,
@@ -34,6 +42,30 @@ pub struct xsk_socket_config {
     pub lib_flags: xsk_socket_config_union,
     pub xdp_flags: u32,
     pub bind_flags: u16,
+}
+
+pub struct XdpUmem {}
+
+impl XdpUmem {
+    pub fn create() {}
+
+    pub fn set_umem_config(cfg: &mut xsk_umem_config, usr_cfg: *const xsk_umem_config) {
+        if (!usr_cfg) {
+            cfg.fill_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
+            cfg.comp_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
+            cfg.frame_size = XSK_UMEM__DEFAULT_FRAME_SIZE;
+            cfg.frame_headroom = XSK_UMEM__DEFAULT_FRAME_HEADROOM;
+            cfg.flags = XSK_UMEM__DEFAULT_FLAGS;
+
+            return;
+        }
+
+        cfg.fill_size = *usr_cfg.fill_size;
+        cfg.comp_size = *usr_cfg.comp_size;
+        cfg.frame_size = *usr_cfg.frame_size;
+        cfg.frame_headroom = *usr_cfg.frame_headroom;
+        cfg.flags = *usr_cfg.flags;
+    }
 }
 
 pub struct XdpSocket {
@@ -64,12 +96,12 @@ impl XdpSocket {
         // Set xdp_socket_config
         set_socket_config()
 
-        // Check if umem refcount
+        // Check if umem refcount is greater than zero.
     }
 
     pub fn set_socket_config(
         cfg: &mut xsk_socket_config,
-        usr_cfg: *const cxsk_socket_config,
+        usr_cfg: *const xsk_socket_config,
     ) -> i32 {
         if (!usr_cfg) {
             cfg.rx_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
@@ -77,6 +109,8 @@ impl XdpSocket {
             cfg.libbpf_flags = 0;
             cfg.xdp_flags = 0;
             cfg.bind_flags = 0;
+
+            return 0;
         }
 
         if (usr_cfg.libbpf_flags & !XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD) {
