@@ -15,9 +15,50 @@ const XSK_RING_PROD__DEFAULT_NUM_DESCS: u32 = 2048;
 const XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD: u32 = (1 << 0);
 const XSK_LIBXDP_FLAGS__INHIBIT_PROG_LOAD: u32 = (1 << 0);
 
-pub struct xsk_socket {}
+const AF_XDP: u32 = 44;
+const PF_XDP: u32 = 44;
 
-struct xsk_umem {}
+const SO_NETNS_COOKIE: u32 = 71;
+
+const SOCK_RAW: u32 = 3;
+
+const SOL_SOCKET: u32 = 1;
+
+pub struct xsk_ctx {
+    fill: *mut xsk_ring_prod,
+    comp: *mut xsk_ring_cons,
+    umem: *mut xsk_umem,
+    queue_id: u32,
+    refcount: i32,
+    ifindex: i32,
+    netns_cookie: u64,
+    xsks_map_fs: i32,
+    // list,
+    // xdp_prog,
+    refcnt_map_fd: i32,
+    //ifname,
+}
+
+//#[derive(Default)]
+pub struct xsk_socket {
+    rx: *mut xsk_ring_cons,
+    tx: *mut xsk_ring_prod,
+    ctx: *mut xsk_ctx,
+    config: xsk_socket_config,
+    fd: i32,
+}
+
+pub struct xsk_umem {
+    pub fill_save: *mut xsk_ring_prod,
+    pub comp_save: *mut xsk_ring_cons,
+    //umem_area
+    pub config: xsk_umem_config,
+    pub fd: i32,
+    pub refcount: i32,
+    //ctx_list
+    pub rx_ring_setup_done: bool,
+    pub tx_ring_setup_done: bool,
+}
 
 pub struct xsk_ring_prod {}
 
@@ -60,11 +101,11 @@ impl XdpUmem {
             return;
         }
 
-        cfg.fill_size = *usr_cfg.fill_size;
-        cfg.comp_size = *usr_cfg.comp_size;
-        cfg.frame_size = *usr_cfg.frame_size;
-        cfg.frame_headroom = *usr_cfg.frame_headroom;
-        cfg.flags = *usr_cfg.flags;
+        cfg.fill_size = (*usr_cfg).fill_size;
+        cfg.comp_size = (*usr_cfg).comp_size;
+        cfg.frame_size = (*usr_cfg).frame_size;
+        cfg.frame_headroom = (*usr_cfg).frame_headroom;
+        cfg.flags = (*usr_cfg).flags;
     }
 }
 
@@ -85,18 +126,63 @@ impl XdpSocket {
         comp: *mut xsk_ring_cons,
         usr_config: *const xsk_socket_config,
     ) -> i32 {
+        let mut rx_setup_done: bool = false;
+        let mut tx_setup_done: bool = false;
+        let mut err: i32 = 0;
+        let mut netns_cookie: u64 = 0;
+        let mut optlen: u32 = 0;
+
         // Check that we have the necessary valid pointers.
         if !umem || !xsk_ptr || !(rx || tx) {
             return libc::EFAULT;
         }
 
         // Calloc size of xsk socket struct
-        let mut xsk = Box::new();
+        let mut xsk: Box<xsk_socket> = Default::default();
 
         // Set xdp_socket_config
-        set_socket_config()
+        XdpSocket::set_socket_config(&mut xsk.config, usr_config);
 
         // Check if umem refcount is greater than zero.
+        if ((*umem).refcount > 0) {
+            unsafe {
+                xsk.fd = libc::socket(AF_XDP as i32, SOCK_RAW as i32, 0);
+            }
+
+            if xsk.fd < 0 {}
+        } else {
+            xsk.fd = (*umem).fd;
+            rx_setup_done = (*umem).rx_ring_setup_done;
+            tx_setup_done = (*umem).tx_ring_setup_done;
+        }
+
+        (*umem).refcount += 1;
+
+        optlen = std::mem::size_of::<u64>() as u32;
+
+        unsafe {
+            err = libc::getsockopt(
+                xsk.fd,
+                SOL_SOCKET as i32,
+                SO_NETNS_COOKIE as i32,
+                &mut netns_cookie as *mut u64 as *mut std::ffi::c_void,
+                &mut optlen as *mut u32,
+            );
+        }
+
+        if err != 0 {
+            if std::io::Error::last_os_error().raw_os_error().unwrap() != libc::ENOPROTOOPT {
+                err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
+            }
+        }
+
+        // get ctx
+
+        // Setup rx if required
+
+        // Setup tx if required
+
+        return 0;
     }
 
     pub fn set_socket_config(
