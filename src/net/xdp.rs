@@ -12,6 +12,11 @@ use std::os::raw::c_char;
 const XSK_RING_CONS__DEFAULT_NUM_DESCS: u32 = 2048;
 const XSK_RING_PROD__DEFAULT_NUM_DESCS: u32 = 2048;
 
+const XSK_UMEM__DEFAULT_FRAME_SHIFT: u32 = 12; /* 4096 bytes */
+const XSK_UMEM__DEFAULT_FRAME_SIZE: u32 = (1 << XSK_UMEM__DEFAULT_FRAME_SHIFT);
+const XSK_UMEM__DEFAULT_FRAME_HEADROOM: u32 = 0;
+const XSK_UMEM__DEFAULT_FLAGS: u32 = 0;
+
 const XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD: u32 = (1 << 0);
 const XSK_LIBXDP_FLAGS__INHIBIT_PROG_LOAD: u32 = (1 << 0);
 
@@ -203,11 +208,13 @@ impl XdpSocket {
             return libc::EINVAL;
         }
 
-        cfg.rx_size = *usr_cfg.rx_size;
-        cfg.tx_size = *usr_cfg.tx_size;
-        cfg.libbpf_flags = *usr_cfg.libbpf_flags;
-        cfg.xdp_flags = *usr_cfg.xdp_flags;
-        cfg.bind_flags = *usr_cfg.bind_flags;
+        cfg.rx_size = (*usr_cfg).rx_size;
+        cfg.tx_size = (*usr_cfg).tx_size;
+        cfg.libbpf_flags = (*usr_cfg).libbpf_flags;
+        cfg.xdp_flags = (*usr_cfg).xdp_flags;
+        cfg.bind_flags = (*usr_cfg).bind_flags;
+
+        0
     }
 
     pub async fn sendmsg() {
