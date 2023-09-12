@@ -65,9 +65,27 @@ pub struct xsk_umem {
     pub tx_ring_setup_done: bool,
 }
 
-pub struct xsk_ring_prod {}
+pub struct xsk_ring_prod {
+    cached_prod: u32,
+    cached_cons: u32,
+    mask: u32,
+    size: u32,
+    producer: *mut u32,
+    consumer: *mut u32,
+    ring: *mut std::ffi::c_void,
+    flags: *mut u32,
+}
 
-pub struct xsk_ring_cons {}
+pub struct xsk_ring_cons {
+    cached_prod: u32,
+    cached_cons: u32,
+    mask: u32,
+    size: u32,
+    producer: *mut u32,
+    consumer: *mut u32,
+    ring: *mut std::ffi::c_void,
+    flags: *mut u32,
+}
 
 pub struct xsk_umem_config {
     pub fill_size: u32,
@@ -95,22 +113,24 @@ pub struct XdpUmem {}
 impl XdpUmem {
     pub fn create() {}
 
-    pub fn set_umem_config(cfg: &mut xsk_umem_config, usr_cfg: *const xsk_umem_config) {
-        if (!usr_cfg) {
-            cfg.fill_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
-            cfg.comp_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
-            cfg.frame_size = XSK_UMEM__DEFAULT_FRAME_SIZE;
-            cfg.frame_headroom = XSK_UMEM__DEFAULT_FRAME_HEADROOM;
-            cfg.flags = XSK_UMEM__DEFAULT_FLAGS;
+    pub fn set_umem_config(cfg: &mut xsk_umem_config, usr_cfg: &Option<xsk_umem_config>) {
+        match *usr_cfg {
+            Some(_usr_cfg) => {
+                cfg.fill_size = _usr_cfg.fill_size;
+                cfg.comp_size = _usr_cfg.comp_size;
+                cfg.frame_size = _usr_cfg.frame_size;
+                cfg.frame_headroom = _usr_cfg.frame_headroom;
+                cfg.flags = _usr_cfg.flags;
+            }
 
-            return;
+            None => {
+                cfg.fill_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
+                cfg.comp_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
+                cfg.frame_size = XSK_UMEM__DEFAULT_FRAME_SIZE;
+                cfg.frame_headroom = XSK_UMEM__DEFAULT_FRAME_HEADROOM;
+                cfg.flags = XSK_UMEM__DEFAULT_FLAGS;
+            }
         }
-
-        cfg.fill_size = (*usr_cfg).fill_size;
-        cfg.comp_size = (*usr_cfg).comp_size;
-        cfg.frame_size = (*usr_cfg).frame_size;
-        cfg.frame_headroom = (*usr_cfg).frame_headroom;
-        cfg.flags = (*usr_cfg).flags;
     }
 }
 
@@ -129,7 +149,7 @@ impl XdpSocket {
         tx: *mut xsk_ring_prod,
         fill: *mut xsk_ring_prod,
         comp: *mut xsk_ring_cons,
-        usr_config: *const xsk_socket_config,
+        usr_config: &Option<xsk_socket_config>,
     ) -> i32 {
         let mut rx_setup_done: bool = false;
         let mut tx_setup_done: bool = false;
@@ -187,32 +207,40 @@ impl XdpSocket {
 
         // Setup tx if required
 
+        // Get mmap offsets
+
+        // rx mmap
+
+        // tx mmap
+
         return 0;
     }
 
     pub fn set_socket_config(
         cfg: &mut xsk_socket_config,
-        usr_cfg: *const xsk_socket_config,
+        usr_cfg: &Option<xsk_socket_config>,
     ) -> i32 {
-        if (!usr_cfg) {
-            cfg.rx_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
-            cfg.tx_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
-            cfg.libbpf_flags = 0;
-            cfg.xdp_flags = 0;
-            cfg.bind_flags = 0;
+        match *usr_cfg {
+            Some(_usr_cfg) => {
+                if (_usr_cfg.lib_flags.libbpf_flags & !(XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD)) != 0 {
+                    return libc::EINVAL;
+                }
 
-            return 0;
+                cfg.rx_size = _usr_cfg.rx_size;
+                cfg.tx_size = _usr_cfg.tx_size;
+                cfg.lib_flags.libbpf_flags = _usr_cfg.lib_flags.libbpf_flags;
+                cfg.xdp_flags = _usr_cfg.xdp_flags;
+                cfg.bind_flags = _usr_cfg.bind_flags;
+            }
+
+            None => {
+                cfg.rx_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
+                cfg.tx_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
+                cfg.lib_flags.libbpf_flags = 0;
+                cfg.xdp_flags = 0;
+                cfg.bind_flags = 0;
+            }
         }
-
-        if (usr_cfg.libbpf_flags & !XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD) {
-            return libc::EINVAL;
-        }
-
-        cfg.rx_size = (*usr_cfg).rx_size;
-        cfg.tx_size = (*usr_cfg).tx_size;
-        cfg.libbpf_flags = (*usr_cfg).libbpf_flags;
-        cfg.xdp_flags = (*usr_cfg).xdp_flags;
-        cfg.bind_flags = (*usr_cfg).bind_flags;
 
         0
     }
