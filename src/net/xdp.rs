@@ -144,7 +144,7 @@ impl XdpSocket {
         xsk_ptr: *mut *mut xsk_socket,
         ifname: *const c_char,
         queue_id: u32,
-        umem: *mut xsk_umem,
+        umem: &mut xsk_umem,
         rx: *mut xsk_ring_cons,
         tx: *mut xsk_ring_prod,
         fill: *mut xsk_ring_prod,
@@ -154,11 +154,12 @@ impl XdpSocket {
         let mut rx_setup_done: bool = false;
         let mut tx_setup_done: bool = false;
         let mut err: i32 = 0;
+        let mut ifindex: i32 = 0;
         let mut netns_cookie: u64 = 0;
         let mut optlen: u32 = 0;
 
         // Check that we have the necessary valid pointers.
-        if !umem || !xsk_ptr || !(rx || tx) {
+        if !umem || xsk_ptr.is_null() || (rx.is_null() && tx.is_null()) {
             return libc::EFAULT;
         }
 
@@ -166,7 +167,21 @@ impl XdpSocket {
         let mut xsk: Box<xsk_socket> = Default::default();
 
         // Set xdp_socket_config
-        XdpSocket::set_socket_config(&mut xsk.config, usr_config);
+        err = XdpSocket::set_socket_config(&mut xsk.config, usr_config);
+
+        if err != 0 {
+            // goto out_xsk_alloc;
+        }
+
+        // Get interface index from name
+        unsafe {
+            ifindex = libc::if_nametoindex(ifname as *mut i8) as i32;
+        }
+
+        if ifindex == 0 {
+            err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
+            // goto out_xsk_alloc;
+        }
 
         // Check if umem refcount is greater than zero.
         if ((*umem).refcount > 0) {
