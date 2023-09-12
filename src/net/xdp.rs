@@ -261,19 +261,19 @@ impl XdpSocket {
         }
 
         // Check if umem refcount is greater than zero.
-        if ((*umem).refcount > 0) {
+        if umem.refcount > 0 {
             unsafe {
                 xsk.fd = libc::socket(AF_XDP as i32, SOCK_RAW as i32, 0);
             }
 
             if xsk.fd < 0 {}
         } else {
-            xsk.fd = (*umem).fd;
-            rx_setup_done = (*umem).rx_ring_setup_done;
-            tx_setup_done = (*umem).tx_ring_setup_done;
+            xsk.fd = umem.fd;
+            rx_setup_done = umem.rx_ring_setup_done;
+            tx_setup_done = umem.tx_ring_setup_done;
         }
 
-        (*umem).refcount += 1;
+        umem.refcount += 1;
 
         optlen = std::mem::size_of::<u64>() as u32;
 
@@ -418,8 +418,8 @@ impl XdpSocket {
         //sxdp.sxdp_ifindex =
         //sxdp.sxdp_queue_id =
 
-        if (umem.refcount > 1) {
-            sxdp.sxdp_flags |= XDP_SHARED_UMEM;
+        if umem.refcount > 1 {
+            sxdp.sxdp_flags |= XDP_SHARED_UMEM as u16;
             sxdp.sxdp_shared_umem_fd = umem.fd as u32;
         } else {
             sxdp.sxdp_flags = xsk.config.bind_flags;
