@@ -1,3 +1,5 @@
+use libc::SOL_XDP;
+
 use crate::{
     buf::fixed::FixedBuf,
     buf::{BoundedBuf, BoundedBufMut},
@@ -28,6 +30,15 @@ const SO_NETNS_COOKIE: u32 = 71;
 const SOCK_RAW: u32 = 3;
 
 const SOL_SOCKET: u32 = 1;
+
+const XDP_MMAP_OFFSETS: u32 = 1;
+const XDP_RX_RING: u32 = 2;
+const XDP_TX_RING: u32 = 3;
+const XDP_UMEM_REG: u32 = 4;
+const XDP_UMEM_FILL_RING: u32 = 5;
+const XDP_UMEM_COMPLETION_RING: u32 = 6;
+const XDP_STATISTICS: u32 = 7;
+const XDP_OPTIONS: u32 = 8;
 
 pub struct xsk_ctx {
     fill: *mut xsk_ring_prod,
@@ -108,6 +119,20 @@ pub struct xsk_socket_config {
     pub bind_flags: u16,
 }
 
+pub struct xdp_ring_offset {
+    pub producer: u64,
+    pub consumer: u64,
+    pub desc: u64,
+    pub flags: u64,
+}
+
+pub struct xdp_mmap_offsets {
+    rx: xdp_ring_offset,
+    tx: xdp_ring_offset,
+    fr: xdp_ring_offset,
+    cr: xdp_ring_offset,
+}
+
 pub struct XdpUmem {}
 
 impl XdpUmem {
@@ -132,6 +157,33 @@ impl XdpUmem {
             }
         }
     }
+}
+
+pub fn xsk_get_mmap_offsets(fd: i32, off: &mut xdp_mmap_offsets) -> i32 {
+    let mut err: i32 = 0;
+    let mut optlen: u32 = 0;
+
+    optlen = std::mem::size_of_val(off) as u32;
+
+    unsafe {
+        err = libc::getsockopt(
+            fd,
+            SOL_XDP,
+            XDP_MMAP_OFFSETS as i32,
+            off as *mut xdp_mmap_offsets as *mut std::ffi::c_void,
+            &mut optlen,
+        )
+    }
+
+    if err != 0 {
+        return 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
+    }
+
+    if optlen == std::mem::size_of_val(off) as u32 {
+        return 0;
+    }
+
+    libc::EINVAL
 }
 
 pub struct XdpSocket {
@@ -219,14 +271,56 @@ impl XdpSocket {
         // get ctx
 
         // Setup rx if required
+        if !rx.is_null() && !rx_setup_done {
+            unsafe {
+                err = libc::setsockopt(
+                    xsk.fd,
+                    SOL_XDP,
+                    XDP_RX_RING as i32,
+                    &xsk.config.rx_size as *const u32 as *const std::ffi::c_void,
+                    std::mem::size_of_val(&xsk.config.rx_size) as u32,
+                );
+            }
+
+            if err != 0 {
+                err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
+                // goto out_put_ctx
+            }
+
+            if xsk.fd == umem.fd {
+                umem.rx_ring_setup_done = true;
+            }
+        }
 
         // Setup tx if required
+        if !tx.is_null() && !tx_setup_done {
+            unsafe {
+                err = libc::setsockopt(
+                    xsk.fd,
+                    SOL_XDP,
+                    XDP_TX_RING as i32,
+                    &xsk.config.tx_size as *const u32 as *const std::ffi::c_void,
+                    std::mem::size_of_val(&xsk.config.tx_size) as u32,
+                );
+            }
+
+            if err != 0 {
+                err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
+                // goto out_put_ctx
+            }
+
+            if xsk.fd == umem.fd {
+                umem.tx_ring_setup_done = true;
+            }
+        }
 
         // Get mmap offsets
 
         // rx mmap
+        if !rx.is_null() {}
 
         // tx mmap
+        if !tx.is_null() {}
 
         return 0;
     }
