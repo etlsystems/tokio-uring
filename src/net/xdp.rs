@@ -42,8 +42,8 @@ const XDP_OPTIONS: u32 = 8;
 
 const XDP_PGOFF_RX_RING: u32 = 0;
 const XDP_PGOFF_TX_RING: u32 = 0x80000000;
-const XDP_UMEM_PGOFF_FILL_RING: u32 = 0x100000000;
-const XDP_UMEM_PGOFF_COMPLETION_RING: u32 = 0x180000000;
+const XDP_UMEM_PGOFF_FILL_RING: u64 = 0x100000000;
+const XDP_UMEM_PGOFF_COMPLETION_RING: u64 = 0x180000000;
 
 const XDP_SHARED_UMEM: u32 = (1 << 0);
 
@@ -156,6 +156,16 @@ pub struct xdp_mmap_offsets {
     pub cr: xdp_ring_offset,
 }
 
+impl Default for xdp_mmap_offsets {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+
 struct xdp_desc {
     pub addr: u64,
     pub len: u32,
@@ -170,13 +180,23 @@ pub struct sockaddr_xdp {
     pub sxdp_shared_umem_fd: u32,
 }
 
+impl Default for sockaddr_xdp {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+
 pub struct XdpUmem {}
 
 impl XdpUmem {
     pub fn create() {}
 
     pub fn set_umem_config(cfg: &mut xsk_umem_config, usr_cfg: &Option<xsk_umem_config>) {
-        match *usr_cfg {
+        match usr_cfg {
             Some(_usr_cfg) => {
                 cfg.fill_size = _usr_cfg.fill_size;
                 cfg.comp_size = _usr_cfg.comp_size;
@@ -233,7 +253,7 @@ pub fn xsk_get_ctx(
         return None;
     }
 
-    for ctx in umem.ctx_list {
+    for ctx in &umem.ctx_list {
         if (ctx.netns_cookie == netns_cookie)
             && (ctx.ifindex == ifindex)
             && (ctx.queue_id == queue_id)
@@ -305,10 +325,10 @@ impl XdpSocket {
         let mut ifindex: i32 = 0;
         let mut netns_cookie: u64 = 0;
         let mut optlen: u32 = 0;
-        let mut off: xdp_mmap_offsets;
+        let mut off: xdp_mmap_offsets = Default::default();
         let mut rx_map: *mut std::ffi::c_void = std::ptr::null_mut();
         let mut tx_map: *mut std::ffi::c_void = std::ptr::null_mut();
-        let mut sxdp: sockaddr_xdp;
+        let mut sxdp: sockaddr_xdp = Default::default();
 
         // Check that we have the necessary valid pointers.
         if xsk_ptr.is_null() || (rx.is_null() && tx.is_null()) {
@@ -562,7 +582,7 @@ impl XdpSocket {
         cfg: &mut xsk_socket_config,
         usr_cfg: &Option<xsk_socket_config>,
     ) -> i32 {
-        match *usr_cfg {
+        match usr_cfg {
             Some(_usr_cfg) => {
                 if (_usr_cfg.libbpf_flags & !(XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD)) != 0 {
                     return libc::EINVAL;
