@@ -94,16 +94,50 @@ impl Default for xsk_socket {
     }
 }
 
+pub struct xsk_socket_config {
+    pub rx_size: u32,
+    pub tx_size: u32,
+    pub libbpf_flags: u32,
+    pub xdp_flags: u32,
+    pub bind_flags: u16,
+}
+
 pub struct xsk_umem {
     pub fill_save: *mut xsk_ring_prod,
     pub comp_save: *mut xsk_ring_cons,
-    //umem_area
+    pub umem_area: *mut std::ffi::c_void,
     pub config: xsk_umem_config,
     pub fd: i32,
     pub refcount: i32,
     pub ctx_list: std::collections::LinkedList<Box<xsk_ctx>>,
     pub rx_ring_setup_done: bool,
     pub tx_ring_setup_done: bool,
+}
+
+impl Default for xsk_umem {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+
+pub struct xsk_umem_config {
+    pub fill_size: u32,
+    pub comp_size: u32,
+    pub frame_size: u32,
+    pub frame_headroom: u32,
+    pub flags: u32,
+}
+
+pub struct xsk_umem_reg {
+    pub addr: u64,
+    pub len: u64,
+    pub chunk_size: u32,
+    pub headroom: u32,
+    pub flags: u32,
 }
 
 pub struct xsk_ring_prod {
@@ -126,22 +160,6 @@ pub struct xsk_ring_cons {
     consumer: *mut u32,
     ring: *mut std::ffi::c_void,
     flags: *mut u32,
-}
-
-pub struct xsk_umem_config {
-    pub fill_size: u32,
-    pub comp_size: u32,
-    pub frame_size: u32,
-    pub frame_headroom: u32,
-    pub flags: u32,
-}
-
-pub struct xsk_socket_config {
-    pub rx_size: u32,
-    pub tx_size: u32,
-    pub libbpf_flags: u32,
-    pub xdp_flags: u32,
-    pub bind_flags: u16,
 }
 
 pub struct xdp_ring_offset {
@@ -190,6 +208,12 @@ impl Default for sockaddr_xdp {
             s.assume_init()
         }
     }
+}
+
+pub fn xsk_page_aligned(buffer: *mut std::ffi::c_void) -> bool {
+    let addr: u64 = buffer as u64;
+
+    (addr & 4095) != 0
 }
 
 pub fn xsk_create_umem_rings(
@@ -311,7 +335,47 @@ pub fn xsk_create_umem_rings(
 pub struct XdpUmem {}
 
 impl XdpUmem {
-    pub fn create() {}
+    pub fn create(
+        umem_ptr: *mut *mut xsk_umem,
+        fd: i32,
+        size: u64,
+        umem_area: *mut std::ffi::c_void,
+        fill: *mut xsk_ring_prod,
+        comp: *mut xsk_ring_cons,
+        usr_config: &Option<xsk_umem_config>,
+    ) -> i32 {
+        let mut mr: xsk_umem_reg;
+        let mut umem: Box<xsk_umem> = Default::default();
+        let mut err = 0;
+
+        if umem_area.is_null() || umem_ptr.is_null() || fill.is_null() || comp.is_null() {
+            return -libc::EFAULT;
+        }
+
+        if (size == 0) && !(xsk_page_aligned(umem_area)) {
+            return -libc::EINVAL;
+        }
+
+        if fd < 0 {
+            unsafe {
+                umem.fd = libc::socket(AF_XDP as i32, SOCK_RAW as i32, 0);
+            }
+        } else {
+            umem.fd = fd;
+        }
+
+        if umem.fd < 0 {
+            err = -std::io::Error::last_os_error().raw_os_error().unwrap();
+            // goto out_umem_alloc;
+            return err;
+        }
+
+        umem.umem_area = umem_area;
+
+        XdpUmem::set_umem_config(&mut umem.config, usr_config);
+
+        0
+    }
 
     pub fn set_umem_config(cfg: &mut xsk_umem_config, usr_cfg: &Option<xsk_umem_config>) {
         match usr_cfg {
@@ -401,7 +465,7 @@ pub fn xsk_create_ctx(
     let mut ctx: Box<xsk_ctx> = Default::default();
 
     if umem.fill_save.is_null() {
-        //err = xsk_create_umem_rings(umem, xsk.fd, fill, comp);
+        err = xsk_create_umem_rings(umem, xsk.fd, fill, comp);
 
         if err != 0 {
             return None;
