@@ -376,7 +376,9 @@ impl XdpUmem {
 
         if umem.fd < 0 {
             err = -std::io::Error::last_os_error().raw_os_error().unwrap();
-            // goto out_umem_alloc;
+
+            drop(umem);
+
             return err;
         }
 
@@ -402,7 +404,12 @@ impl XdpUmem {
 
         if err != 0 {
             err = -std::io::Error::last_os_error().raw_os_error().unwrap();
-            // goto out_socket;
+
+            unsafe {
+                libc::close(fd);
+            }
+            drop(umem);
+
             return err;
         }
 
@@ -411,7 +418,11 @@ impl XdpUmem {
         err = xsk_create_umem_rings(&mut umem, fd_temp, fill, comp);
 
         if err != 0 {
-            // goto out_socket
+            unsafe {
+                libc::close(fd);
+            }
+            drop(umem);
+
             return err;
         }
 
