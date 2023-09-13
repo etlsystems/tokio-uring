@@ -519,7 +519,7 @@ pub fn xsk_put_ctx(ctx: &mut xsk_ctx, unmap: bool) {
         return;
     }
 
-    if (unmap) {
+    if unmap {
         unsafe {
             err = xsk_get_mmap_offsets((*umem).fd, &mut off);
         }
