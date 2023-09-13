@@ -615,7 +615,7 @@ impl XdpSocket {
 
         // Check that we have the necessary valid pointers.
         if xsk_ptr.is_null() || (rx.is_null() && tx.is_null()) {
-            return libc::EFAULT;
+            return -libc::EFAULT;
         }
 
         // Calloc size of xsk socket struct
