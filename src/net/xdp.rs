@@ -31,6 +31,8 @@ const SOCK_RAW: u32 = 3;
 
 const SOL_SOCKET: u32 = 1;
 
+const INIT_NS: u32 = 1;
+
 const XDP_MMAP_OFFSETS: u32 = 1;
 const XDP_RX_RING: u32 = 2;
 const XDP_TX_RING: u32 = 3;
@@ -343,6 +345,8 @@ impl XdpSocket {
 
         if err != 0 {
             // goto out_xsk_alloc;
+
+            return err;
         }
 
         // Get interface index from name
@@ -353,6 +357,8 @@ impl XdpSocket {
         if ifindex == 0 {
             err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
             // goto out_xsk_alloc;
+
+            return err;
         }
 
         // Check if umem refcount is greater than zero.
@@ -361,7 +367,12 @@ impl XdpSocket {
                 xsk.fd = libc::socket(AF_XDP as i32, SOCK_RAW as i32, 0);
             }
 
-            if xsk.fd < 0 {}
+            if xsk.fd < 0 {
+                err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
+                // goto out_xsk_alloc
+
+                return err;
+            }
         } else {
             xsk.fd = umem.fd;
             rx_setup_done = umem.rx_ring_setup_done;
@@ -385,15 +396,22 @@ impl XdpSocket {
         if err != 0 {
             if std::io::Error::last_os_error().raw_os_error().unwrap() != libc::ENOPROTOOPT {
                 err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
+
+                //goto out_socket
+                return err;
             }
+
+            netns_cookie = INIT_NS as u64;
         }
 
         // get ctx
         let mut ctx = match xsk_get_ctx(umem, netns_cookie, ifindex, queue_id) {
             Some(_ctx) => *_ctx,
             None => {
-                if (fill.is_null() || comp.is_null()) {
+                if fill.is_null() || comp.is_null() {
                     err = -libc::EFAULT;
+                    // goto out_socket
+                    return err;
                 }
 
                 let ctx = match xsk_create_ctx(
@@ -434,6 +452,8 @@ impl XdpSocket {
             if err != 0 {
                 err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
                 // goto out_put_ctx
+
+                return err;
             }
 
             if xsk.fd == umem.fd {
@@ -456,6 +476,8 @@ impl XdpSocket {
             if err != 0 {
                 err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
                 // goto out_put_ctx
+
+                return err;
             }
 
             if xsk.fd == umem.fd {
@@ -469,6 +491,8 @@ impl XdpSocket {
         if err != 0 {
             err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
             // goto out_put_ctx;
+
+            return err;
         }
 
         // rx mmap
@@ -488,6 +512,8 @@ impl XdpSocket {
             if rx_map == MAP_FAILED {
                 err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
                 // goto out_put_ctx;
+
+                return err;
             }
 
             unsafe {
@@ -521,6 +547,8 @@ impl XdpSocket {
             if tx_map == MAP_FAILED {
                 err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
                 // goto out_mmap_rx;
+
+                return err;
             }
 
             unsafe {
@@ -539,8 +567,8 @@ impl XdpSocket {
 
         // Setup sockaddr
         sxdp.sxdp_family = PF_XDP as u16;
-        //sxdp.sxdp_ifindex =
-        //sxdp.sxdp_queue_id =
+        sxdp.sxdp_ifindex = ctx.ifindex as u32;
+        sxdp.sxdp_queue_id = ctx.queue_id;
 
         if umem.refcount > 1 {
             sxdp.sxdp_flags |= XDP_SHARED_UMEM as u16;
@@ -561,11 +589,19 @@ impl XdpSocket {
         if err != 0 {
             err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
             // goto out_mmap_tx;
+
+            return err;
         }
 
         // Setup xdp prog
         if (xsk.config.libbpf_flags & XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD) != 0 {
             // err = xsk_setup_xdp_prog(xsk);
+
+            if err != 0 {
+                // goto out_mmap_tx;
+
+                return err;
+            }
         }
 
         unsafe {
