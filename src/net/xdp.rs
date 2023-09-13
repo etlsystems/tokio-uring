@@ -192,6 +192,64 @@ impl Default for sockaddr_xdp {
     }
 }
 
+pub fn xsk_create_umem_rings(
+    umem: &mut xsk_umem,
+    fd: i32,
+    fill: *mut xsk_ring_prod,
+    comp: *mut xsk_ring_cons,
+) -> i32 {
+    let mut off: xdp_mmap_offsets = Default::default();
+    let mut map: *mut std::ffi::c_void = std::ptr::null_mut();
+    let mut err = 0;
+
+    unsafe {
+        err = libc::setsockopt(
+            fd,
+            SOL_XDP,
+            XDP_UMEM_FILL_RING as i32,
+            &umem.config.fill_size as *const u32 as *const std::ffi::c_void,
+            std::mem::size_of_val(&umem.config.fill_size) as u32,
+        );
+    }
+
+    if err != 0 {
+        return -std::io::Error::last_os_error().raw_os_error().unwrap();
+    }
+
+    unsafe {
+        err = libc::setsockopt(
+            fd,
+            SOL_XDP,
+            XDP_UMEM_COMPLETION_RING as i32,
+            &umem.config.comp_size as *const u32 as *const std::ffi::c_void,
+            std::mem::size_of_val(&umem.config.comp_size) as u32,
+        );
+    }
+
+    if err != 0 {
+        return -std::io::Error::last_os_error().raw_os_error().unwrap();
+    }
+
+    err = xsk_get_mmap_offsets(fd, &mut off);
+
+    if err != 0 {
+        return -std::io::Error::last_os_error().raw_os_error().unwrap();
+    }
+
+    unsafe {
+        map = libc::mmap(
+            std::ptr::null_mut(),
+            (off.fr.desc as usize) + (umem.config.fill_size as usize) * std::mem::size_of::<u64>(),
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_SHARED | libc::MAP_POPULATE,
+            fd,
+            XDP_UMEM_PGOFF_FILL_RING as i64,
+        )
+    }
+
+    0
+}
+
 pub struct XdpUmem {}
 
 impl XdpUmem {
@@ -216,6 +274,10 @@ impl XdpUmem {
             }
         }
     }
+}
+
+pub fn xsk_setup_xdp_program(xsk: &mut xsk_socket, xsks_map_fs: i32) -> i32 {
+    0
 }
 
 pub fn xsk_get_mmap_offsets(fd: i32, off: &mut xdp_mmap_offsets) -> i32 {
