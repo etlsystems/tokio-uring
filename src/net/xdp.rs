@@ -247,6 +247,64 @@ pub fn xsk_create_umem_rings(
         )
     }
 
+    if map == libc::MAP_FAILED {
+        err = -std::io::Error::last_os_error().raw_os_error().unwrap();
+
+        unsafe {
+            libc::munmap(
+                map,
+                (off.fr.desc as usize)
+                    + (umem.config.fill_size as usize) * std::mem::size_of::<u64>(),
+            );
+        }
+
+        return err;
+    }
+
+    unsafe {
+        (*fill).mask = umem.config.fill_size - 1;
+        (*fill).size = umem.config.fill_size;
+        (*fill).producer = map.add(off.fr.producer as usize) as *mut u32;
+        (*fill).consumer = map.add(off.fr.consumer as usize) as *mut u32;
+        (*fill).flags = map.add(off.fr.flags as usize) as *mut u32;
+        (*fill).ring = map.add(off.fr.desc as usize);
+        (*fill).cached_cons = umem.config.fill_size;
+    }
+
+    unsafe {
+        map = libc::mmap(
+            std::ptr::null_mut(),
+            (off.cr.desc as usize) + (umem.config.comp_size as usize) * std::mem::size_of::<u64>(),
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_SHARED | libc::MAP_POPULATE,
+            fd,
+            XDP_UMEM_PGOFF_COMPLETION_RING as i64,
+        )
+    }
+
+    if map == libc::MAP_FAILED {
+        err = -std::io::Error::last_os_error().raw_os_error().unwrap();
+
+        unsafe {
+            libc::munmap(
+                map,
+                (off.cr.desc as usize)
+                    + (umem.config.comp_size as usize) * std::mem::size_of::<u64>(),
+            );
+        }
+
+        return err;
+    }
+
+    unsafe {
+        (*comp).mask = umem.config.comp_size - 1;
+        (*comp).size = umem.config.comp_size;
+        (*comp).producer = map.add(off.cr.producer as usize) as *mut u32;
+        (*comp).consumer = map.add(off.cr.consumer as usize) as *mut u32;
+        (*comp).flags = map.add(off.cr.flags as usize) as *mut u32;
+        (*comp).ring = map.add(off.cr.desc as usize);
+    }
+
     0
 }
 
@@ -581,10 +639,10 @@ impl XdpSocket {
             unsafe {
                 (*rx).mask = xsk.config.rx_size - 1;
                 (*rx).size = xsk.config.rx_size;
-                (*rx).producer = rx_map.wrapping_add(off.rx.producer as usize) as *mut u32;
-                (*rx).consumer = rx_map.wrapping_add(off.rx.consumer as usize) as *mut u32;
-                (*rx).flags = rx_map.wrapping_add(off.rx.flags as usize) as *mut u32;
-                (*rx).ring = rx_map.wrapping_add(off.rx.desc as usize);
+                (*rx).producer = rx_map.add(off.rx.producer as usize) as *mut u32;
+                (*rx).consumer = rx_map.add(off.rx.consumer as usize) as *mut u32;
+                (*rx).flags = rx_map.add(off.rx.flags as usize) as *mut u32;
+                (*rx).ring = rx_map.add(off.rx.desc as usize);
                 (*rx).cached_prod = *(*rx).producer;
                 (*rx).cached_cons = *(*rx).consumer;
             }
@@ -616,10 +674,10 @@ impl XdpSocket {
             unsafe {
                 (*tx).mask = xsk.config.tx_size - 1;
                 (*tx).size = xsk.config.tx_size;
-                (*tx).producer = tx_map.wrapping_add(off.tx.producer as usize) as *mut u32;
-                (*tx).consumer = tx_map.wrapping_add(off.tx.consumer as usize) as *mut u32;
-                (*tx).flags = tx_map.wrapping_add(off.tx.flags as usize) as *mut u32;
-                (*tx).ring = tx_map.wrapping_add(off.tx.desc as usize);
+                (*tx).producer = tx_map.add(off.tx.producer as usize) as *mut u32;
+                (*tx).consumer = tx_map.add(off.tx.consumer as usize) as *mut u32;
+                (*tx).flags = tx_map.add(off.tx.flags as usize) as *mut u32;
+                (*tx).ring = tx_map.add(off.tx.desc as usize);
                 (*tx).cached_prod = *(*tx).producer;
                 (*tx).cached_cons = *(*tx).consumer + xsk.config.tx_size;
             }
