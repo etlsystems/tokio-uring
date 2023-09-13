@@ -59,8 +59,6 @@ pub struct xsk_ctx {
     ifindex: i32,
     netns_cookie: u64,
     xsks_map_fs: i32,
-    // list,
-    // xdp_prog,
     refcnt_map_fd: i32,
     ifname: String,
 }
@@ -457,9 +455,16 @@ impl XdpUmem {
     }
 }
 
-pub fn xsk_setup_xdp_program(xsk: &mut xsk_socket, xsks_map_fs: i32) -> i32 {
+/*pub fn xsk_setup_xdp_program(xsk: &mut xsk_socket, xsks_map_fs: i32) -> i32 {
+    let mut ctx = xsk.ctx;
+
+    unsafe {
+        (*ctx).
+        (*ctx).refcnt_map_fd = -libc::ENOENT;
+    }
+
     0
-}
+}*/
 
 pub fn xsk_get_mmap_offsets(fd: i32, off: &mut xdp_mmap_offsets) -> i32 {
     let mut err: i32 = 0;
