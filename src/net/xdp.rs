@@ -7,7 +7,7 @@ use crate::{
     UnsubmittedWrite,
 };
 
-use std::{f64::consts, os::raw::c_char};
+use std::{borrow::BorrowMut, f64::consts, os::raw::c_char};
 
 //use libxdp_sys::{_xsk_ring_cons__peek, _xsk_ring_cons__release, _xsk_ring_cons__rx_desc};
 
@@ -138,6 +138,16 @@ pub struct xsk_umem_reg {
     pub chunk_size: u32,
     pub headroom: u32,
     pub flags: u32,
+}
+
+impl Default for xsk_umem_reg {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
 }
 
 pub struct xsk_ring_prod {
@@ -344,7 +354,7 @@ impl XdpUmem {
         comp: *mut xsk_ring_cons,
         usr_config: &Option<xsk_umem_config>,
     ) -> i32 {
-        let mut mr: xsk_umem_reg;
+        let mut mr: xsk_umem_reg = Default::default();
         let mut umem: Box<xsk_umem> = Default::default();
         let mut err = 0;
 
@@ -373,6 +383,44 @@ impl XdpUmem {
         umem.umem_area = umem_area;
 
         XdpUmem::set_umem_config(&mut umem.config, usr_config);
+
+        mr.addr = umem_area as u64;
+        mr.len = size;
+        mr.chunk_size = umem.config.frame_size;
+        mr.headroom = umem.config.frame_headroom;
+        mr.flags = umem.config.flags;
+
+        unsafe {
+            err = libc::setsockopt(
+                umem.fd,
+                SOL_XDP,
+                XDP_UMEM_REG as i32,
+                &mr as *const xsk_umem_reg as *const std::ffi::c_void,
+                std::mem::size_of_val(&mr) as u32,
+            )
+        }
+
+        if err != 0 {
+            err = -std::io::Error::last_os_error().raw_os_error().unwrap();
+            // goto out_socket;
+            return err;
+        }
+
+        let fd_temp = umem.fd;
+
+        err = xsk_create_umem_rings(&mut umem, fd_temp, fill, comp);
+
+        if err != 0 {
+            // goto out_socket
+            return err;
+        }
+
+        umem.fill_save = fill;
+        umem.comp_save = comp;
+
+        unsafe {
+            (*umem_ptr) = umem.as_mut();
+        }
 
         0
     }
