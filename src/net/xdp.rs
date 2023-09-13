@@ -59,7 +59,17 @@ pub struct xsk_ctx {
     // list,
     // xdp_prog,
     refcnt_map_fd: i32,
-    //ifname,
+    ifname: String,
+}
+
+impl Default for xsk_ctx {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
 }
 
 //#[derive(Default)]
@@ -78,7 +88,7 @@ pub struct xsk_umem {
     pub config: xsk_umem_config,
     pub fd: i32,
     pub refcount: i32,
-    //ctx_list
+    pub ctx_list: std::collections::LinkedList<&xsk_ctx>,
     pub rx_ring_setup_done: bool,
     pub tx_ring_setup_done: bool,
 }
@@ -207,6 +217,60 @@ pub fn xsk_get_mmap_offsets(fd: i32, off: &mut xdp_mmap_offsets) -> i32 {
     libc::EINVAL
 }
 
+pub fn xsk_get_ctx(
+    umem: &mut xsk_umem,
+    netns_cookie: u64,
+    ifindex: i32,
+    queue_id: u32,
+) -> Option<&xsk_ctx> {
+    if umem.ctx_list.is_empty() {
+        return None;
+    }
+
+    for ctx in umem.ctx_list {
+        if (ctx.netns_cookie == netns_cookie)
+            && (ctx.ifindex == ifindex)
+            && (ctx.queue_id == queue_id)
+        {
+            return Some(ctx);
+        }
+    }
+
+    None
+}
+
+pub fn xsk_create_ctx(
+    xsk: &xsk_socket,
+    umem: &mut xsk_umem,
+    netns_cookie: u64,
+    ifindex: i32,
+    ifname: &String,
+    queue_id: u32,
+    fill: *mut xsk_ring_prod,
+    comp: *mut xsk_ring_cons,
+) -> Option<xsk_ctx> {
+    let mut err: i32 = 0;
+    let mut ctx: xsk_ctx = Default::default();
+
+    if umem.fill_save.is_null() {
+        //err = xsk_create_umem_rings(umem, xsk.fd, fill, comp);
+
+        if err != 0 {
+            return None;
+        }
+    } else if (umem.fill_save != fill) || (umem.comp_save != comp) {
+        // Copy data
+    }
+
+    ctx.netns_cookie = netns_cookie;
+    ctx.ifindex = ifindex;
+    ctx.refcount = 1;
+    ctx.umem = umem;
+    ctx.queue_id = queue_id;
+
+    Some(ctx)
+}
+
 pub struct XdpSocket {
     pub(super) inner: Socket,
 }
@@ -215,7 +279,7 @@ impl XdpSocket {
     // Must already have umem
     pub fn create(
         xsk_ptr: *mut *mut xsk_socket,
-        ifname: *const c_char,
+        ifname: &String,
         queue_id: u32,
         umem: &mut xsk_umem,
         rx: *mut xsk_ring_cons,
@@ -241,7 +305,7 @@ impl XdpSocket {
         }
 
         // Calloc size of xsk socket struct
-        let mut xsk: Box<xsk_socket>; // = Default::default();
+        let mut xsk: xsk_socket;
 
         // Set xdp_socket_config
         err = XdpSocket::set_socket_config(&mut xsk.config, usr_config);
@@ -252,7 +316,7 @@ impl XdpSocket {
 
         // Get interface index from name
         unsafe {
-            ifindex = libc::if_nametoindex(ifname as *mut i8) as i32;
+            ifindex = libc::if_nametoindex(ifname.as_bytes_mut() as *mut [u8] as *mut i8) as i32;
         }
 
         if ifindex == 0 {
@@ -294,6 +358,35 @@ impl XdpSocket {
         }
 
         // get ctx
+        let mut ctx = match xsk_get_ctx(umem, netns_cookie, ifindex, queue_id) {
+            Some(_ctx) => *_ctx,
+            None => {
+                if (fill.is_null() || comp.is_null()) {
+                    err = -libc::EFAULT;
+                }
+
+                let ctx = match xsk_create_ctx(
+                    &xsk,
+                    umem,
+                    netns_cookie,
+                    ifindex,
+                    ifname,
+                    queue_id,
+                    fill,
+                    comp,
+                ) {
+                    Some(_ctx) => _ctx,
+                    None => {
+                        //goto out_socket;
+                        return libc::ENOMEM;
+                    }
+                };
+
+                ctx
+            }
+        };
+
+        xsk.ctx = &mut ctx;
 
         // Setup rx if required
         if !rx.is_null() && !rx_setup_done {
@@ -445,7 +538,7 @@ impl XdpSocket {
         }
 
         unsafe {
-            (*xsk_ptr) = xsk.as_mut();
+            (*xsk_ptr) = &mut xsk;
         }
 
         umem.fill_save = std::ptr::null_mut();
