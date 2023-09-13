@@ -510,6 +510,8 @@ pub fn xsk_get_ctx(
     None
 }
 
+pub fn xsk_put_ctx(ctx: &mut xsk_ctx, unmap: bool) {}
+
 pub fn xsk_create_ctx(
     xsk: &xsk_socket,
     umem: &mut xsk_umem,
@@ -831,7 +833,45 @@ impl XdpSocket {
 
         if err != 0 {
             err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
-            // goto out_mmap_tx;
+
+            // out_mmap_tx
+            if !(tx.is_null()) {
+                unsafe {
+                    libc::munmap(
+                        tx_map,
+                        (off.tx.desc as usize)
+                            + (xsk.config.tx_size as usize)
+                            + std::mem::size_of::<xdp_desc>(),
+                    );
+                }
+            }
+
+            // out_mmap_rx
+            if !(rx.is_null()) {
+                unsafe {
+                    libc::munmap(
+                        rx_map,
+                        (off.rx.desc as usize)
+                            + (xsk.config.rx_size as usize)
+                            + std::mem::size_of::<xdp_desc>(),
+                    );
+                }
+            }
+
+            // out_put_ctx
+            let unmap = umem.fill_save != fill;
+
+            xsk_put_ctx(&mut ctx, unmap);
+
+            // out_socket
+            if (umem.refcount - 1) == 0 {
+                unsafe {
+                    libc::close(xsk.fd);
+                }
+            }
+
+            // out_xsk_alloc
+            drop(xsk);
 
             return err;
         }
