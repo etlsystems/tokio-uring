@@ -151,25 +151,25 @@ impl Default for xsk_umem_reg {
 }
 
 pub struct xsk_ring_prod {
-    cached_prod: u32,
-    cached_cons: u32,
-    mask: u32,
-    size: u32,
-    producer: *mut u32,
-    consumer: *mut u32,
-    ring: *mut std::ffi::c_void,
-    flags: *mut u32,
+    pub cached_prod: u32,
+    pub cached_cons: u32,
+    pub mask: u32,
+    pub size: u32,
+    pub producer: *mut u32,
+    pub consumer: *mut u32,
+    pub ring: *mut std::ffi::c_void,
+    pub flags: *mut u32,
 }
 
 pub struct xsk_ring_cons {
-    cached_prod: u32,
-    cached_cons: u32,
-    mask: u32,
-    size: u32,
-    producer: *mut u32,
-    consumer: *mut u32,
-    ring: *mut std::ffi::c_void,
-    flags: *mut u32,
+    pub cached_prod: u32,
+    pub cached_cons: u32,
+    pub mask: u32,
+    pub size: u32,
+    pub producer: *mut u32,
+    pub consumer: *mut u32,
+    pub ring: *mut std::ffi::c_void,
+    pub flags: *mut u32,
 }
 
 pub struct xdp_ring_offset {
@@ -510,7 +510,43 @@ pub fn xsk_get_ctx(
     None
 }
 
-pub fn xsk_put_ctx(ctx: &mut xsk_ctx, unmap: bool) {}
+pub fn xsk_put_ctx(ctx: &mut xsk_ctx, unmap: bool) {
+    let umem = ctx.umem;
+    let mut off: xdp_mmap_offsets = Default::default();
+    let mut err = 0;
+
+    if (ctx.refcount - 1) > 0 {
+        return;
+    }
+
+    if (unmap) {
+        unsafe {
+            err = xsk_get_mmap_offsets((*umem).fd, &mut off);
+        }
+
+        if err != 0 {
+            drop(ctx.to_owned());
+
+            return;
+        }
+
+        unsafe {
+            libc::munmap(
+                (*ctx.fill).ring,
+                (off.fr.desc as usize)
+                    + ((*umem).config.fill_size as usize) * std::mem::size_of::<u64>(),
+            );
+
+            libc::munmap(
+                (*ctx.fill).ring,
+                (off.cr.desc as usize)
+                    + ((*umem).config.comp_size as usize) * std::mem::size_of::<u64>(),
+            );
+        }
+
+        drop(ctx.to_owned());
+    }
+}
 
 pub fn xsk_create_ctx(
     xsk: &xsk_socket,
