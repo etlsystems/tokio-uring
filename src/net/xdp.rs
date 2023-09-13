@@ -47,6 +47,7 @@ const XDP_UMEM_PGOFF_COMPLETION_RING: u32 = 0x180000000;
 
 const XDP_SHARED_UMEM: u32 = (1 << 0);
 
+#[derive(Clone)]
 pub struct xsk_ctx {
     fill: *mut xsk_ring_prod,
     comp: *mut xsk_ring_cons,
@@ -81,6 +82,16 @@ pub struct xsk_socket {
     fd: i32,
 }
 
+impl Default for xsk_socket {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+
 pub struct xsk_umem {
     pub fill_save: *mut xsk_ring_prod,
     pub comp_save: *mut xsk_ring_cons,
@@ -88,7 +99,7 @@ pub struct xsk_umem {
     pub config: xsk_umem_config,
     pub fd: i32,
     pub refcount: i32,
-    pub ctx_list: std::collections::LinkedList<&xsk_ctx>,
+    pub ctx_list: std::collections::LinkedList<Box<xsk_ctx>>,
     pub rx_ring_setup_done: bool,
     pub tx_ring_setup_done: bool,
 }
@@ -123,15 +134,10 @@ pub struct xsk_umem_config {
     pub flags: u32,
 }
 
-union xsk_socket_config_union {
-    libbpf_flags: u32,
-    libxdp_flags: u32,
-}
-
 pub struct xsk_socket_config {
     pub rx_size: u32,
     pub tx_size: u32,
-    pub lib_flags: xsk_socket_config_union,
+    pub libbpf_flags: u32,
     pub xdp_flags: u32,
     pub bind_flags: u16,
 }
@@ -222,7 +228,7 @@ pub fn xsk_get_ctx(
     netns_cookie: u64,
     ifindex: i32,
     queue_id: u32,
-) -> Option<&xsk_ctx> {
+) -> Option<Box<xsk_ctx>> {
     if umem.ctx_list.is_empty() {
         return None;
     }
@@ -232,7 +238,7 @@ pub fn xsk_get_ctx(
             && (ctx.ifindex == ifindex)
             && (ctx.queue_id == queue_id)
         {
-            return Some(ctx);
+            return Some(ctx.clone());
         }
     }
 
@@ -250,7 +256,7 @@ pub fn xsk_create_ctx(
     comp: *mut xsk_ring_cons,
 ) -> Option<xsk_ctx> {
     let mut err: i32 = 0;
-    let mut ctx: xsk_ctx = Default::default();
+    let mut ctx: Box<xsk_ctx> = Default::default();
 
     if umem.fill_save.is_null() {
         //err = xsk_create_umem_rings(umem, xsk.fd, fill, comp);
@@ -267,8 +273,13 @@ pub fn xsk_create_ctx(
     ctx.refcount = 1;
     ctx.umem = umem;
     ctx.queue_id = queue_id;
+    ctx.ifname = ifname.clone();
+    ctx.fill = fill;
+    ctx.comp = comp;
 
-    Some(ctx)
+    umem.ctx_list.push_back(ctx.clone());
+
+    Some(*ctx)
 }
 
 pub struct XdpSocket {
@@ -300,12 +311,12 @@ impl XdpSocket {
         let mut sxdp: sockaddr_xdp;
 
         // Check that we have the necessary valid pointers.
-        if !umem || xsk_ptr.is_null() || (rx.is_null() && tx.is_null()) {
+        if xsk_ptr.is_null() || (rx.is_null() && tx.is_null()) {
             return libc::EFAULT;
         }
 
         // Calloc size of xsk socket struct
-        let mut xsk: xsk_socket;
+        let mut xsk: xsk_socket = Default::default();
 
         // Set xdp_socket_config
         err = XdpSocket::set_socket_config(&mut xsk.config, usr_config);
@@ -316,7 +327,7 @@ impl XdpSocket {
 
         // Get interface index from name
         unsafe {
-            ifindex = libc::if_nametoindex(ifname.as_bytes_mut() as *mut [u8] as *mut i8) as i32;
+            ifindex = libc::if_nametoindex(ifname.as_bytes() as *const [u8] as *const i8) as i32;
         }
 
         if ifindex == 0 {
@@ -533,7 +544,7 @@ impl XdpSocket {
         }
 
         // Setup xdp prog
-        if (xsk.config.lib_flags.libbpf_flags & XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD) != 0 {
+        if (xsk.config.libbpf_flags & XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD) != 0 {
             // err = xsk_setup_xdp_prog(xsk);
         }
 
@@ -553,13 +564,13 @@ impl XdpSocket {
     ) -> i32 {
         match *usr_cfg {
             Some(_usr_cfg) => {
-                if (_usr_cfg.lib_flags.libbpf_flags & !(XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD)) != 0 {
+                if (_usr_cfg.libbpf_flags & !(XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD)) != 0 {
                     return libc::EINVAL;
                 }
 
                 cfg.rx_size = _usr_cfg.rx_size;
                 cfg.tx_size = _usr_cfg.tx_size;
-                cfg.lib_flags.libbpf_flags = _usr_cfg.lib_flags.libbpf_flags;
+                cfg.libbpf_flags = _usr_cfg.libbpf_flags;
                 cfg.xdp_flags = _usr_cfg.xdp_flags;
                 cfg.bind_flags = _usr_cfg.bind_flags;
             }
@@ -567,7 +578,7 @@ impl XdpSocket {
             None => {
                 cfg.rx_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
                 cfg.tx_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
-                cfg.lib_flags.libbpf_flags = 0;
+                cfg.libbpf_flags = 0;
                 cfg.xdp_flags = 0;
                 cfg.bind_flags = 0;
             }
