@@ -195,7 +195,7 @@ impl Default for xdp_mmap_offsets {
     }
 }
 
-struct xdp_desc {
+pub struct xdp_desc {
     pub addr: u64,
     pub len: u32,
     pub options: u32,
@@ -622,6 +622,26 @@ pub fn xsk_ring_cons__peek(cons: *mut xsk_ring_cons, nb: u32, idx: &mut u32) -> 
     }
 
     entries
+}
+
+pub fn xsk_ring_cons__rx_desc(rx: *const xsk_ring_cons, idx: u32) -> *const xdp_desc {
+    unsafe {
+        let descs: *const xdp_desc = ((*rx).ring as *const xdp_desc);
+
+        let descs = std::slice::from_raw_parts(descs, ((*rx).mask) as usize);
+
+        &descs[(idx & (*rx).mask) as usize]
+    }
+}
+
+pub fn xsk_ring_cons__release(cons: *mut xsk_ring_cons, nb: u32) {
+    unsafe {
+        let atomic_consumer = AtomicPtr::new((*cons).consumer);
+
+        let mut value = *((*cons).consumer) + nb;
+
+        atomic_consumer.store(&mut value, atomic::Ordering::Release)
+    }
 }
 
 pub struct XdpSocket {
