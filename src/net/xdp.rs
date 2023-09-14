@@ -454,6 +454,8 @@ impl XdpUmem {
             }
         }
     }
+
+    pub fn fill() {}
 }
 
 /*pub fn xsk_setup_xdp_program(xsk: &mut xsk_socket, xsks_map_fs: i32) -> i32 {
@@ -626,7 +628,7 @@ pub fn xsk_ring_cons__peek(cons: *mut xsk_ring_cons, nb: u32, idx: &mut u32) -> 
 
 pub fn xsk_ring_cons__rx_desc(rx: *const xsk_ring_cons, idx: u32) -> *const xdp_desc {
     unsafe {
-        let descs: *const xdp_desc = ((*rx).ring as *const xdp_desc);
+        let descs: *const xdp_desc = (*rx).ring as *const xdp_desc;
 
         let descs = std::slice::from_raw_parts(descs, ((*rx).mask) as usize);
 
@@ -641,6 +643,46 @@ pub fn xsk_ring_cons__release(cons: *mut xsk_ring_cons, nb: u32) {
         let mut value = *((*cons).consumer) + nb;
 
         atomic_consumer.store(&mut value, atomic::Ordering::Release)
+    }
+}
+
+pub fn xsk_prod_nb_free(r: *mut xsk_ring_prod, nb: u32) -> u32 {
+    unsafe {
+        let free_entries: u32 = (*r).cached_cons - (*r).cached_prod;
+
+        if free_entries >= nb {
+            return free_entries;
+        }
+
+        let atomic_consumer = AtomicPtr::new((*r).consumer);
+
+        (*r).cached_cons = *(atomic_consumer.load(atomic::Ordering::Acquire));
+        (*r).cached_cons += (*r).size;
+
+        (*r).cached_cons - (*r).cached_prod
+    }
+}
+
+pub fn xsk_ring_prod__reserve(prod: *mut xsk_ring_prod, nb: u32, idx: *mut u32) -> u32 {
+    if xsk_prod_nb_free(prod, nb) < nb {
+        return 0;
+    }
+
+    unsafe {
+        (*idx) = (*prod).cached_prod;
+        (*prod).cached_prod += nb;
+    }
+
+    nb
+}
+
+pub fn xsk_ring_prod__fill_addr(fill: *mut xsk_ring_prod, idx: u32) -> *const u64 {
+    unsafe {
+        let addrs: *mut u64 = (*fill).ring as *mut u64;
+
+        let addrs = std::slice::from_raw_parts(addrs, (*fill).mask as usize);
+
+        &addrs[(idx & (*fill).mask) as usize]
     }
 }
 
