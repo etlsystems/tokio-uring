@@ -630,7 +630,7 @@ impl XdpSocket {
         err = XdpSocket::set_socket_config(&mut xsk.config, usr_config);
 
         if err != 0 {
-            // goto out_xsk_alloc;
+            drop(xsk);
 
             return err;
         }
@@ -642,7 +642,8 @@ impl XdpSocket {
 
         if ifindex == 0 {
             err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
-            // goto out_xsk_alloc;
+
+            drop(xsk);
 
             return err;
         }
@@ -655,7 +656,8 @@ impl XdpSocket {
 
             if xsk.fd < 0 {
                 err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
-                // goto out_xsk_alloc
+
+                drop(xsk);
 
                 return err;
             }
@@ -683,7 +685,16 @@ impl XdpSocket {
             if std::io::Error::last_os_error().raw_os_error().unwrap() != libc::ENOPROTOOPT {
                 err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
 
-                //goto out_socket
+                // out_socket
+                if (umem.refcount - 1) == 0 {
+                    unsafe {
+                        libc::close(xsk.fd);
+                    }
+                }
+
+                // out_xsk_alloc
+                drop(xsk);
+
                 return err;
             }
 
@@ -696,7 +707,17 @@ impl XdpSocket {
             None => {
                 if fill.is_null() || comp.is_null() {
                     err = -libc::EFAULT;
-                    // goto out_socket
+
+                    // out_socket
+                    if (umem.refcount - 1) == 0 {
+                        unsafe {
+                            libc::close(xsk.fd);
+                        }
+                    }
+
+                    // out_xsk_alloc
+                    drop(xsk);
+
                     return err;
                 }
 
@@ -712,7 +733,16 @@ impl XdpSocket {
                 ) {
                     Some(_ctx) => _ctx,
                     None => {
-                        //goto out_socket;
+                        // out_socket
+                        if (umem.refcount - 1) == 0 {
+                            unsafe {
+                                libc::close(xsk.fd);
+                            }
+                        }
+
+                        // out_xsk_alloc
+                        drop(xsk);
+
                         return libc::ENOMEM;
                     }
                 };
@@ -737,7 +767,21 @@ impl XdpSocket {
 
             if err != 0 {
                 err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
-                // goto out_put_ctx
+
+                // out_put_ctx
+                let unmap = umem.fill_save != fill;
+
+                xsk_put_ctx(&mut ctx, unmap);
+
+                // out_socket
+                if (umem.refcount - 1) == 0 {
+                    unsafe {
+                        libc::close(xsk.fd);
+                    }
+                }
+
+                // out_xsk_alloc
+                drop(xsk);
 
                 return err;
             }
@@ -761,7 +805,21 @@ impl XdpSocket {
 
             if err != 0 {
                 err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
-                // goto out_put_ctx
+
+                // out_put_ctx
+                let unmap = umem.fill_save != fill;
+
+                xsk_put_ctx(&mut ctx, unmap);
+
+                // out_socket
+                if (umem.refcount - 1) == 0 {
+                    unsafe {
+                        libc::close(xsk.fd);
+                    }
+                }
+
+                // out_xsk_alloc
+                drop(xsk);
 
                 return err;
             }
@@ -776,7 +834,21 @@ impl XdpSocket {
 
         if err != 0 {
             err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
-            // goto out_put_ctx;
+
+            // out_put_ctx
+            let unmap = umem.fill_save != fill;
+
+            xsk_put_ctx(&mut ctx, unmap);
+
+            // out_socket
+            if (umem.refcount - 1) == 0 {
+                unsafe {
+                    libc::close(xsk.fd);
+                }
+            }
+
+            // out_xsk_alloc
+            drop(xsk);
 
             return err;
         }
@@ -797,7 +869,21 @@ impl XdpSocket {
 
             if rx_map == MAP_FAILED {
                 err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
-                // goto out_put_ctx;
+
+                // out_put_ctx
+                let unmap = umem.fill_save != fill;
+
+                xsk_put_ctx(&mut ctx, unmap);
+
+                // out_socket
+                if (umem.refcount - 1) == 0 {
+                    unsafe {
+                        libc::close(xsk.fd);
+                    }
+                }
+
+                // out_xsk_alloc
+                drop(xsk);
 
                 return err;
             }
@@ -832,7 +918,33 @@ impl XdpSocket {
 
             if tx_map == MAP_FAILED {
                 err = 0 - std::io::Error::last_os_error().raw_os_error().unwrap();
-                // goto out_mmap_rx;
+
+                // out_mmap_rx
+                if !(rx.is_null()) {
+                    unsafe {
+                        libc::munmap(
+                            rx_map,
+                            (off.rx.desc as usize)
+                                + (xsk.config.rx_size as usize)
+                                + std::mem::size_of::<xdp_desc>(),
+                        );
+                    }
+                }
+
+                // out_put_ctx
+                let unmap = umem.fill_save != fill;
+
+                xsk_put_ctx(&mut ctx, unmap);
+
+                // out_socket
+                if (umem.refcount - 1) == 0 {
+                    unsafe {
+                        libc::close(xsk.fd);
+                    }
+                }
+
+                // out_xsk_alloc
+                drop(xsk);
 
                 return err;
             }
