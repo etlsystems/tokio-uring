@@ -7,6 +7,7 @@ use crate::{
     UnsubmittedWrite,
 };
 
+use std::sync::atomic::{self, AtomicPtr};
 use std::{borrow::BorrowMut, f64::consts, os::raw::c_char};
 
 //use libxdp_sys::{_xsk_ring_cons__peek, _xsk_ring_cons__release, _xsk_ring_cons__rx_desc};
@@ -590,6 +591,39 @@ pub fn xsk_create_ctx(
     Some(*ctx)
 }
 
+pub fn xsk_cons_nb_avail(r: *mut xsk_ring_cons, nb: u32) -> u32 {
+    let mut entries: u32 = 0;
+
+    unsafe {
+        entries = (*r).cached_prod - (*r).cached_cons;
+        let atomic_producer = AtomicPtr::new((*r).producer);
+
+        if entries == 0 {
+            (*r).cached_prod = *(atomic_producer.load(atomic::Ordering::Acquire));
+            entries = (*r).cached_prod - (*r).cached_prod;
+        }
+    }
+
+    if entries > nb {
+        nb
+    } else {
+        entries
+    }
+}
+
+pub fn xsk_ring_cons__peek(cons: *mut xsk_ring_cons, nb: u32, idx: &mut u32) -> u32 {
+    let entries = xsk_cons_nb_avail(cons, nb);
+
+    if entries > 0 {
+        unsafe {
+            *idx = (*cons).cached_cons;
+            (*cons).cached_cons += entries;
+        }
+    }
+
+    entries
+}
+
 pub struct XdpSocket {
     pub(super) inner: Socket,
 }
@@ -1084,4 +1118,62 @@ impl XdpSocket {
     }
 
     pub async fn recvmsg() {}
+
+    /*#[inline]
+    pub fn try_recv(
+        &mut self,
+        bufs: &mut ArrayDeque<[BufMmap<T>; PENDING_LEN], Wrapping>,
+        mut batch_size: usize,
+        user: T,
+    ) -> Result<usize, SocketError> {
+        let mut idx_rx: u32 = 0;
+        let rcvd: usize;
+
+        batch_size = min(bufs.capacity() - bufs.len(), batch_size);
+
+        unsafe {
+            rcvd = _xsk_ring_cons__peek(self.rx.as_mut(), batch_size as u64, &mut idx_rx) as usize;
+        }
+        if rcvd == 0 {
+            // Note that the caller needs to check if the queue needs to be woken up
+            return Ok(0);
+        }
+
+        let buf_len_available = self.socket.umem.area.get_buf_len() - AF_XDP_RESERVED as usize;
+
+        for _ in 0..rcvd {
+            let desc: *const xdp_desc;
+            let b: BufMmap<T>;
+
+            unsafe {
+                desc = _xsk_ring_cons__rx_desc(self.rx.as_mut(), idx_rx);
+                let addr = (*desc).addr;
+                let len = (*desc).len.try_into().unwrap();
+                let ptr = self.socket.umem.area.get_ptr().offset(addr as isize);
+
+                b = BufMmap {
+                    addr,
+                    len,
+                    data: std::slice::from_raw_parts_mut(ptr as *mut u8, buf_len_available),
+                    user,
+                };
+            }
+
+            let r = bufs.push_back(b);
+
+            if r.is_some() {
+                // Since we set batch_size above based on how much space there is, this should
+                // never happen.
+                panic!("there should be space");
+            }
+
+            idx_rx += 1;
+        }
+
+        unsafe {
+            _xsk_ring_cons__release(self.rx.as_mut(), rcvd as u64);
+        }
+
+        Ok(rcvd)
+    }*/
 }
