@@ -103,7 +103,7 @@ impl<T: IoBufMut> Pool<T> {
                 *state = BufState::CheckedOut;
                 (init_len, next)
             }
-            BufState::CheckedOut => panic!("buffer is checked out"),
+            BufState::CheckedOut => panic!("buffer at index {} is checked out", index),
         };
 
         // Update the head of the free list for this capacity.

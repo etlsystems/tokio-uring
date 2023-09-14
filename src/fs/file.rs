@@ -186,7 +186,7 @@ impl File {
     ///
     /// Marked as unsafe, as it is the callers responsibility to ensure that any data which is required
     /// to be stable is either passed in as the metadata argument, or otherwise stable through the life of the operation
-    pub async unsafe fn uring_cmd16<T: std::marker::Unpin>(
+    pub async unsafe fn uring_cmd16<T: std::marker::Unpin + 'static>(
         &self,
         cmd_op: u32,
         cmd: [u8; 16],
