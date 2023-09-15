@@ -7,7 +7,10 @@ use crate::{
     UnsubmittedWrite,
 };
 
-use std::sync::atomic::{self, AtomicPtr};
+use std::sync::{
+    atomic::{self, AtomicPtr},
+    Arc,
+};
 use std::{borrow::BorrowMut, f64::consts, os::raw::c_char};
 
 //use libxdp_sys::{_xsk_ring_cons__peek, _xsk_ring_cons__release, _xsk_ring_cons__rx_desc};
@@ -48,7 +51,21 @@ const XDP_PGOFF_TX_RING: u32 = 0x80000000;
 const XDP_UMEM_PGOFF_FILL_RING: u64 = 0x100000000;
 const XDP_UMEM_PGOFF_COMPLETION_RING: u64 = 0x180000000;
 
+const XDP_FLAGS_UPDATE_IF_NOEXIST: u32 = (1 << 0);
+
 const XDP_SHARED_UMEM: u32 = (1 << 0);
+const XDP_COPY: u32 = (1 << 1); /* Force copy-mode */
+const XDP_ZEROCOPY: u32 = (1 << 2); /* Force zero-copy mode */
+
+/* If this option is set, the driver might go sleep and in that case
+ * the XDP_RING_NEED_WAKEUP flag in the fill and/or Tx rings will be
+ * set. If it is set, the application need to explicitly wake up the
+ * driver with a poll() (Rx and Tx) or sendto() (Tx only). If you are
+ * running the driver and the application on the same core, you should
+ * use this option so that the kernel will yield to the user space
+ * application.
+ */
+const XDP_USE_NEED_WAKEUP: u32 = (1 << 3);
 
 #[derive(Clone)]
 pub struct xsk_ctx {
@@ -160,6 +177,16 @@ pub struct xsk_ring_prod {
     pub flags: *mut u32,
 }
 
+impl Default for xsk_ring_prod {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+
 pub struct xsk_ring_cons {
     pub cached_prod: u32,
     pub cached_cons: u32,
@@ -169,6 +196,16 @@ pub struct xsk_ring_cons {
     pub consumer: *mut u32,
     pub ring: *mut std::ffi::c_void,
     pub flags: *mut u32,
+}
+
+impl Default for xsk_ring_cons {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
 }
 
 pub struct xdp_ring_offset {
@@ -344,9 +381,46 @@ pub fn xsk_create_umem_rings(
 pub struct XdpUmem {}
 
 impl XdpUmem {
+    pub fn new(area: Arc<MmapArea<'a, T>>, completion_ring_size: u32, fill_ring_size: u32) {
+        // Check that ring sizes are both powers of two.
+
+        // Init Umem config
+        let umem_cfg = xsk_umem_config {
+            fill_size: fill_ring_size,
+            comp_size: completion_ring_size,
+            frame_size: area.get_buf_len() as u32,
+            frame_headroom: XSK_UMEM__DEFAULT_FRAME_HEADROOM,
+            flags: 0,
+        };
+
+        // Allocate rings on the heap
+        let mut cq: Box<xsk_ring_cons> = Default::default();
+        let mut fq: Box<xsk_ring_prod> = Default::default();
+
+        // Setup umem_ptr
+        let mut umem: *mut xsk_umem = std::ptr::null_mut();
+        let umem_ptr: *mut *mut xsk_umem = &mut umem;
+
+        // Setup umem size - buffer length * no of buffers
+        let size = (area.get_buf_len() * area.get_buf_num()) as u64;
+
+        let fd: i32 = -1;
+
+        // Call inner create function
+        XdpUmem::create(
+            umem_ptr,
+            fd,
+            size,
+            area.get_ptr(),
+            fq.as_mut(),
+            cq.as_mut(),
+            &Some(umem_cfg),
+        );
+    }
+
     pub fn create(
         umem_ptr: *mut *mut xsk_umem,
-        fd: i32,
+        fd: i32, // Should be Option<i32>
         size: u64,
         umem_area: *mut std::ffi::c_void,
         fill: *mut xsk_ring_prod,
@@ -391,6 +465,7 @@ impl XdpUmem {
         mr.headroom = umem.config.frame_headroom;
         mr.flags = umem.config.flags;
 
+        // Apply Umem settings through libc::setsockopt()
         unsafe {
             err = libc::setsockopt(
                 umem.fd,
@@ -691,6 +766,45 @@ pub struct XdpSocket {
 }
 
 impl XdpSocket {
+    pub fn new(
+        umem: &mut xsk_umem,
+        if_name: &str,
+        queue: usize,
+        rx_ring_size: u32,
+        tx_ring_size: u32,
+        //options: SocketOptions,
+    ) {
+        // Check that the ring sizes are both powers of two.
+
+        // Setup socket options
+        let socket_config = xsk_socket_config {
+            rx_size: rx_ring_size,
+            tx_size: tx_ring_size,
+            xdp_flags: XDP_FLAGS_UPDATE_IF_NOEXIST,
+            bind_flags: (XDP_USE_NEED_WAKEUP | XDP_ZEROCOPY) as u16,
+            libbpf_flags: 0,
+        };
+
+        // Allocate rings on the heap
+        let mut rx: Box<xsk_ring_cons> = Default::default();
+        let mut tx: Box<xsk_ring_prod> = Default::default();
+
+        // Setup xsk_ptr
+        let mut xsk: *mut xsk_socket = std::ptr::null_mut();
+        let xsk_ptr: *mut *mut xsk_socket = &mut xsk;
+
+        // Call inner create function
+        XdpSocket::create(
+            xsk_ptr,
+            &if_name.to_string(),
+            queue as u32,
+            umem,
+            rx.as_mut(),
+            tx.as_mut(),
+            &Some(socket_config),
+        );
+    }
+
     // Must already have umem
     pub fn create(
         xsk_ptr: *mut *mut xsk_socket,
@@ -699,8 +813,8 @@ impl XdpSocket {
         umem: &mut xsk_umem,
         rx: *mut xsk_ring_cons,
         tx: *mut xsk_ring_prod,
-        fill: *mut xsk_ring_prod,
-        comp: *mut xsk_ring_cons,
+        //fill: *mut xsk_ring_prod,
+        //comp: *mut xsk_ring_cons,
         usr_config: &Option<xsk_socket_config>,
     ) -> i32 {
         let mut rx_setup_done: bool = false;
@@ -713,6 +827,9 @@ impl XdpSocket {
         let mut rx_map: *mut std::ffi::c_void = std::ptr::null_mut();
         let mut tx_map: *mut std::ffi::c_void = std::ptr::null_mut();
         let mut sxdp: sockaddr_xdp = Default::default();
+
+        let fill = umem.fill_save;
+        let comp = umem.comp_save;
 
         // Check that we have the necessary valid pointers.
         if xsk_ptr.is_null() || (rx.is_null() && tx.is_null()) {
