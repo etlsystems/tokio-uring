@@ -331,6 +331,7 @@ pub fn xsk_create_umem_rings(
         return err;
     }
 
+    // Setup struct for fill ring.
     unsafe {
         (*fill).mask = umem.config.fill_size - 1;
         (*fill).size = umem.config.fill_size;
@@ -836,8 +837,8 @@ impl XdpSocket {
             return -libc::EFAULT;
         }
 
-        // Calloc size of xsk socket struct
-        let mut xsk: xsk_socket = Default::default();
+        // Allocate xsk_socket on the heap.
+        let mut xsk: Box<xsk_socket> = Default::default();
 
         // Set xdp_socket_config
         err = XdpSocket::set_socket_config(&mut xsk.config, usr_config);
@@ -861,7 +862,7 @@ impl XdpSocket {
             return err;
         }
 
-        // Check if umem refcount is greater than zero.
+        // Check if umem refcount is greater than zero. If it is, then the umem is shared and we need our own file descriptor for the AF_XDP socket, otherwise we can use the same file descriptor as the Umem.
         if umem.refcount > 0 {
             unsafe {
                 xsk.fd = libc::socket(AF_XDP as i32, SOCK_RAW as i32, 0);
@@ -914,7 +915,7 @@ impl XdpSocket {
             netns_cookie = INIT_NS as u64;
         }
 
-        // get ctx
+        // Get the correct umem context for this particular AF_XDP socket. If no existing context exists then we create a new context and add it to the list.
         let mut ctx = match xsk_get_ctx(umem, netns_cookie, ifindex, queue_id) {
             Some(_ctx) => *_ctx,
             None => {
@@ -1254,7 +1255,7 @@ impl XdpSocket {
         }
 
         unsafe {
-            (*xsk_ptr) = &mut xsk;
+            (*xsk_ptr) = xsk.as_mut();
         }
 
         umem.fill_save = std::ptr::null_mut();
