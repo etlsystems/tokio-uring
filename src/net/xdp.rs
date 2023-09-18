@@ -202,7 +202,11 @@ pub struct XskUmem {
 }
 
 impl XskUmem {
-    pub fn new<T: BoundedBufMut>(area: &mut T, completion_ring_size: u32, fill_ring_size: u32) {
+    pub fn new<T: BoundedBufMut>(
+        area: &mut T,
+        completion_ring_size: u32,
+        fill_ring_size: u32,
+    ) -> Result<XskUmem, i32> {
         // Check that ring sizes are both powers of two.
 
         // Init Umem config
@@ -218,18 +222,13 @@ impl XskUmem {
         let mut cq: Box<XskRing> = Default::default();
         let mut fq: Box<XskRing> = Default::default();
 
-        // Setup umem_ptr
-        let mut umem: *mut XskUmem = std::ptr::null_mut();
-        let umem_ptr: *mut *mut XskUmem = &mut umem;
-
         // Setup umem size - buffer length * no of buffers
         let size = area.bytes_total() as u64;
 
         let fd: i32 = -1;
 
         // Call inner create function
-        XskUmem::create(
-            umem_ptr,
+        let umem = XskUmem::create(
             fd,
             size,
             area.stable_mut_ptr() as *mut std::ffi::c_void,
@@ -237,27 +236,28 @@ impl XskUmem {
             cq.as_mut(),
             &Some(umem_cfg),
         );
+
+        umem
     }
 
     pub fn create(
-        umem_ptr: *mut *mut XskUmem,
         fd: i32, // Should be Option<i32>
         size: u64,
         umem_area: *mut std::ffi::c_void,
         fill: *mut XskRing,
         comp: *mut XskRing,
         usr_config: &Option<XskUmemConfig>,
-    ) -> i32 {
+    ) -> Result<XskUmem, i32> {
         let mut mr: XskUmemReg = Default::default();
         let mut umem: Box<XskUmem> = Default::default();
         let mut err = 0;
 
-        if umem_area.is_null() || umem_ptr.is_null() || fill.is_null() || comp.is_null() {
-            return -libc::EFAULT;
+        if umem_area.is_null() || fill.is_null() || comp.is_null() {
+            return Err(-libc::EFAULT);
         }
 
         if (size == 0) && !(xsk_page_aligned(umem_area)) {
-            return -libc::EINVAL;
+            return Err(-libc::EINVAL);
         }
 
         if fd < 0 {
@@ -273,7 +273,7 @@ impl XskUmem {
 
             drop(umem);
 
-            return err;
+            return Err(err);
         }
 
         umem.umem_area = umem_area;
@@ -305,7 +305,7 @@ impl XskUmem {
             }
             drop(umem);
 
-            return err;
+            return Err(err);
         }
 
         let fd_temp = umem.fd;
@@ -318,17 +318,13 @@ impl XskUmem {
             }
             drop(umem);
 
-            return err;
+            return Err(err);
         }
 
         umem.fill_save = fill;
         umem.comp_save = comp;
 
-        unsafe {
-            (*umem_ptr) = umem.as_mut();
-        }
-
-        0
+        Ok(*umem)
     }
 
     pub fn set_umem_config(cfg: &mut XskUmemConfig, usr_cfg: &Option<XskUmemConfig>) {
@@ -1243,11 +1239,11 @@ impl XskSocket {
         0
     }
 
-    pub async fn sendmsg<T: BoundedBuf>(&self, buf: Vec<T>) {
+    pub async fn sendmsg<T: BoundedBuf>(&self, _buf: Vec<T>) {
         //libxdp_sys::sendmsg;
     }
 
-    pub async fn recvmsg<T: BoundedBufMut>(&self, buf: Vec<T>)
+    pub async fn recvmsg<T: BoundedBufMut>(&self, _buf: Vec<T>)
     /*-> crate::BufResult<(usize, std::net::SocketAddr), Vec<T>>*/
     {
     }
