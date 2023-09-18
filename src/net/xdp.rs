@@ -812,8 +812,6 @@ impl XskSocket {
         umem: &mut XskUmem,
         rx: *mut XskRing,
         tx: *mut XskRing,
-        //fill: *mut xsk_ring_prod,
-        //comp: *mut xsk_ring_cons,
         usr_config: &Option<XskSocketConfig>,
     ) -> Result<XskSocket, i32> {
         let mut rx_setup_done: bool = false;
