@@ -244,15 +244,15 @@ impl XskUmem {
         fd: i32, // Should be Option<i32>
         size: u64,
         umem_area: *mut std::ffi::c_void,
-        fill: *mut XskRing,
-        comp: *mut XskRing,
+        fill: &mut XskRing,
+        comp: &mut XskRing,
         usr_config: &Option<XskUmemConfig>,
     ) -> Result<XskUmem, i32> {
         let mut mr: XskUmemReg = Default::default();
         let mut umem: Box<XskUmem> = Default::default();
         let mut err = 0;
 
-        if umem_area.is_null() || fill.is_null() || comp.is_null() {
+        if umem_area.is_null() {
             return Err(-libc::EFAULT);
         }
 
