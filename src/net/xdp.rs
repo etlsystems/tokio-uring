@@ -1197,7 +1197,7 @@ impl XskSocket {
         }
 
         // Setup xdp prog
-        if (xsk.config.libbpf_flags & XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD) != 0 {
+        if (xsk.config.libbpf_flags & XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD) == 0 {
             // err = xsk_setup_xdp_prog(xsk);
 
             if err != 0 {
