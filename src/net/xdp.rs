@@ -347,7 +347,43 @@ impl XskUmem {
         }
     }
 
-    pub fn fill() {}
+    pub fn fill<T: BoundedBufMut>(
+        &mut self,
+        prod: &mut XskRing,
+        bufs: &mut Vec<T>,
+        mut batch_size: usize,
+    ) -> usize {
+        let mut idx: u32 = 0;
+        let reserved: u32;
+
+        batch_size = std::cmp::min(bufs.len(), batch_size);
+
+        if batch_size == 0 {
+            return 0;
+        }
+
+        reserved = XskRing::xsk_ring_prod_reserve(prod, batch_size as u32, &mut idx);
+
+        for _ in 0..reserved {
+            let buf = bufs.pop();
+
+            match buf {
+                Some(buf) => unsafe {
+                    let ptr = XskRing::xsk_ring_prod_fill_addr(prod, idx);
+                    idx += 1;
+
+                    *ptr = buf.stable_ptr().sub(self.umem_area as usize) as u64;
+                },
+                None => {}
+            }
+        }
+
+        if reserved > 0 {
+            XskRing::xsk_ring_prod_submit(prod, reserved);
+        }
+
+        reserved as usize
+    }
 }
 
 impl Default for XskUmem {
@@ -479,13 +515,25 @@ impl XskRing {
         nb
     }
 
-    pub fn xsk_ring_prod_fill_addr(fill: &mut XskRing, idx: u32) -> *const u64 {
+    pub fn xsk_ring_prod_fill_addr(fill: &mut XskRing, idx: u32) -> *mut u64 {
         unsafe {
             let addrs: *mut u64 = fill.ring as *mut u64;
 
-            let addrs = std::slice::from_raw_parts(addrs, fill.mask as usize);
+            let addrs = std::slice::from_raw_parts_mut(addrs, fill.mask as usize);
 
-            &addrs[(idx & fill.mask) as usize]
+            let ret = &mut addrs[(idx & fill.mask) as usize];
+
+            ret
+        }
+    }
+
+    pub fn xsk_ring_prod_submit(prod: &mut XskRing, nb: u32) {
+        unsafe {
+            let atomic_producer = AtomicPtr::new(prod.producer);
+
+            let mut value = *(prod.producer) + nb;
+
+            atomic_producer.store(&mut value, atomic::Ordering::Release);
         }
     }
 }
