@@ -241,7 +241,7 @@ impl XskUmem {
     }
 
     pub fn create(
-        fd: i32, // Should be Option<i32>
+        fd: i32, // TODO: Should be Option<i32>
         size: u64,
         umem_area: *mut std::ffi::c_void,
         fill: &mut XskRing,
@@ -399,16 +399,16 @@ pub struct XskRing {
 }
 
 impl XskRing {
-    pub fn xsk_cons_nb_avail(r: *mut XskRing, nb: u32) -> u32 {
+    pub fn xsk_cons_nb_avail(r: &mut XskRing, nb: u32) -> u32 {
         let mut entries: u32 = 0;
 
         unsafe {
-            entries = (*r).cached_prod - (*r).cached_cons;
-            let atomic_producer = AtomicPtr::new((*r).producer);
+            entries = r.cached_prod - r.cached_cons;
+            let atomic_producer = AtomicPtr::new(r.producer);
 
             if entries == 0 {
-                (*r).cached_prod = *(atomic_producer.load(atomic::Ordering::Acquire));
-                entries = (*r).cached_prod - (*r).cached_prod;
+                r.cached_prod = *(atomic_producer.load(atomic::Ordering::Acquire));
+                entries = r.cached_prod - r.cached_prod;
             }
         }
 
@@ -419,76 +419,73 @@ impl XskRing {
         }
     }
 
-    pub fn xsk_ring_cons_peek(cons: *mut XskRing, nb: u32, idx: &mut u32) -> u32 {
+    pub fn xsk_ring_cons_peek(cons: &mut XskRing, nb: u32, idx: &mut u32) -> u32 {
         let entries = XskRing::xsk_cons_nb_avail(cons, nb);
 
         if entries > 0 {
-            unsafe {
-                *idx = (*cons).cached_cons;
-                (*cons).cached_cons += entries;
-            }
+            *idx = cons.cached_cons;
+            cons.cached_cons += entries;
         }
 
         entries
     }
 
-    pub fn xsk_ring_cons_rx_desc(rx: *const XskRing, idx: u32) -> *const XdpDesc {
+    pub fn xsk_ring_cons_rx_desc(rx: &XskRing, idx: u32) -> *const XdpDesc {
         unsafe {
-            let descs: *const XdpDesc = (*rx).ring as *const XdpDesc;
+            let descs: *const XdpDesc = rx.ring as *const XdpDesc;
 
-            let descs = std::slice::from_raw_parts(descs, ((*rx).mask) as usize);
+            let descs = std::slice::from_raw_parts(descs, (rx.mask) as usize);
 
-            &descs[(idx & (*rx).mask) as usize]
+            &descs[(idx & rx.mask) as usize]
         }
     }
 
-    pub fn xsk_ring_cons_release(cons: *mut XskRing, nb: u32) {
+    pub fn xsk_ring_cons_release(cons: &mut XskRing, nb: u32) {
         unsafe {
-            let atomic_consumer = AtomicPtr::new((*cons).consumer);
+            let atomic_consumer = AtomicPtr::new(cons.consumer);
 
-            let mut value = *((*cons).consumer) + nb;
+            let mut value = *(cons.consumer) + nb;
 
             atomic_consumer.store(&mut value, atomic::Ordering::Release)
         }
     }
 
-    pub fn xsk_prod_nb_free(r: *mut XskRing, nb: u32) -> u32 {
-        unsafe {
-            let free_entries: u32 = (*r).cached_cons - (*r).cached_prod;
+    pub fn xsk_prod_nb_free(r: &mut XskRing, nb: u32) -> u32 {
+        let free_entries: u32 = r.cached_cons - r.cached_prod;
 
-            if free_entries >= nb {
-                return free_entries;
-            }
-
-            let atomic_consumer = AtomicPtr::new((*r).consumer);
-
-            (*r).cached_cons = *(atomic_consumer.load(atomic::Ordering::Acquire));
-            (*r).cached_cons += (*r).size;
-
-            (*r).cached_cons - (*r).cached_prod
+        if free_entries >= nb {
+            return free_entries;
         }
+
+        let atomic_consumer = AtomicPtr::new(r.consumer);
+
+        unsafe {
+            r.cached_cons = *(atomic_consumer.load(atomic::Ordering::Acquire));
+        }
+
+        r.cached_cons += r.size;
+
+        r.cached_cons - r.cached_prod
     }
 
-    pub fn xsk_ring_prod_reserve(prod: *mut XskRing, nb: u32, idx: *mut u32) -> u32 {
+    pub fn xsk_ring_prod_reserve(prod: &mut XskRing, nb: u32, idx: &mut u32) -> u32 {
         if XskRing::xsk_prod_nb_free(prod, nb) < nb {
             return 0;
         }
 
-        unsafe {
-            (*idx) = (*prod).cached_prod;
-            (*prod).cached_prod += nb;
-        }
+        *idx = prod.cached_prod;
+        prod.cached_prod += nb;
 
         nb
     }
 
-    pub fn xsk_ring_prod_fill_addr(fill: *mut XskRing, idx: u32) -> *const u64 {
+    pub fn xsk_ring_prod_fill_addr(fill: &mut XskRing, idx: u32) -> *const u64 {
         unsafe {
-            let addrs: *mut u64 = (*fill).ring as *mut u64;
+            let addrs: *mut u64 = fill.ring as *mut u64;
 
-            let addrs = std::slice::from_raw_parts(addrs, (*fill).mask as usize);
+            let addrs = std::slice::from_raw_parts(addrs, fill.mask as usize);
 
-            &addrs[(idx & (*fill).mask) as usize]
+            &addrs[(idx & fill.mask) as usize]
         }
     }
 }
