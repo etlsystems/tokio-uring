@@ -1291,6 +1291,48 @@ impl XskSocket {
     {
     }
 
+    pub fn try_recv<T: BoundedBufMut>(&mut self, bufs: Vec<T>, mut batch_size: usize) -> usize {
+        let mut idx = 0;
+        let received: usize;
+
+        batch_size = std::cmp::min(bufs.capacity(), batch_size);
+
+        unsafe {
+            received =
+                XskRing::xsk_ring_cons_peek(self.rx.as_mut().unwrap(), batch_size as u32, &mut idx)
+                    as usize;
+        }
+
+        if received == 0 {
+            return 0;
+        }
+
+        //let buf_len_available = ;
+
+        for _ in 0..received {
+            let desc: *const XdpDesc;
+            let buf: T;
+
+            unsafe {
+                desc = XskRing::xsk_ring_cons_rx_desc(self.rx.as_mut().unwrap(), idx);
+
+                let addr = (*desc).addr;
+                let len = (*desc).len;
+                //let ptr = self.umem.area.get_ptr().add(addr);
+
+                //buf.get_buf().put_slice(src)
+
+                //buf.
+            }
+        }
+
+        unsafe {
+            XskRing::xsk_ring_cons_release(self.rx.as_mut().unwrap(), received as u32);
+        }
+
+        received
+    }
+
     /*#[inline]
     pub fn try_recv(
         &mut self,
