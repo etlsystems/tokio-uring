@@ -372,6 +372,7 @@ pub struct XskUmemConfig {
     pub flags: u32,
 }
 
+#[repr(C)]
 pub struct XskUmemReg {
     pub addr: u64,
     pub len: u64,
@@ -506,6 +507,7 @@ impl Default for XskRing {
     }
 }
 
+#[repr(C)]
 pub struct XdpRingOffsets {
     pub producer: u64,
     pub consumer: u64,
@@ -513,6 +515,7 @@ pub struct XdpRingOffsets {
     pub flags: u64,
 }
 
+#[repr(C)]
 pub struct XdpMmapOffsets {
     pub rx: XdpRingOffsets,
     pub tx: XdpRingOffsets,
@@ -530,6 +533,7 @@ impl Default for XdpMmapOffsets {
     }
 }
 
+#[repr(C)]
 pub struct XdpDesc {
     pub addr: u64,
     pub len: u32,
@@ -1247,11 +1251,14 @@ impl XskSocket {
         0
     }
 
-    pub async fn sendmsg() {
+    pub async fn sendmsg<T: BoundedBuf>(&self, buf: Vec<T>) {
         //libxdp_sys::sendmsg;
     }
 
-    pub async fn recvmsg() {}
+    pub async fn recvmsg<T: BoundedBufMut>(&self, buf: Vec<T>)
+    /*-> crate::BufResult<(usize, std::net::SocketAddr), Vec<T>>*/
+    {
+    }
 
     /*#[inline]
     pub fn try_recv(
