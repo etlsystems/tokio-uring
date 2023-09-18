@@ -752,7 +752,7 @@ impl XskSocket {
         let mut tx: Box<XskRing> = Default::default();
 
         // Call inner create function
-        let mut xsk = XskSocket::create(
+        let xsk = XskSocket::create(
             &if_name.to_string(),
             queue as u32,
             umem,
