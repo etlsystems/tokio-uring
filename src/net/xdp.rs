@@ -735,7 +735,7 @@ impl XskSocket {
         rx_ring_size: u32,
         tx_ring_size: u32,
         //options: SocketOptions,
-    ) {
+    ) -> Result<XskSocket, i32> {
         // Check that the ring sizes are both powers of two.
 
         // Setup socket options
@@ -751,13 +751,8 @@ impl XskSocket {
         let mut rx: Box<XskRing> = Default::default();
         let mut tx: Box<XskRing> = Default::default();
 
-        // Setup xsk_ptr
-        let mut xsk: *mut XskSocket = std::ptr::null_mut();
-        let xsk_ptr: *mut *mut XskSocket = &mut xsk;
-
         // Call inner create function
-        XskSocket::create(
-            xsk_ptr,
+        let mut xsk = XskSocket::create(
             &if_name.to_string(),
             queue as u32,
             umem,
@@ -765,11 +760,12 @@ impl XskSocket {
             tx.as_mut(),
             &Some(socket_config),
         );
+
+        xsk
     }
 
     // Must already have umem
     pub fn create(
-        xsk_ptr: *mut *mut XskSocket,
         ifname: &String,
         queue_id: u32,
         umem: &mut XskUmem,
@@ -778,7 +774,7 @@ impl XskSocket {
         //fill: *mut xsk_ring_prod,
         //comp: *mut xsk_ring_cons,
         usr_config: &Option<XskSocketConfig>,
-    ) -> i32 {
+    ) -> Result<XskSocket, i32> {
         let mut rx_setup_done: bool = false;
         let mut tx_setup_done: bool = false;
         let mut err: i32 = 0;
@@ -794,8 +790,8 @@ impl XskSocket {
         let comp = umem.comp_save;
 
         // Check that we have the necessary valid pointers.
-        if xsk_ptr.is_null() || (rx.is_null() && tx.is_null()) {
-            return -libc::EFAULT;
+        if rx.is_null() && tx.is_null() {
+            return Err(-libc::EFAULT);
         }
 
         // Allocate xsk_socket on the heap.
@@ -807,7 +803,7 @@ impl XskSocket {
         if err != 0 {
             drop(xsk);
 
-            return err;
+            return Err(err);
         }
 
         // Get interface index from name
@@ -820,7 +816,7 @@ impl XskSocket {
 
             drop(xsk);
 
-            return err;
+            return Err(err);
         }
 
         // Check if umem refcount is greater than zero. If it is, then the umem is shared and we need our own file descriptor for the AF_XDP socket, otherwise we can use the same file descriptor as the Umem.
@@ -834,7 +830,7 @@ impl XskSocket {
 
                 drop(xsk);
 
-                return err;
+                return Err(err);
             }
         } else {
             xsk.fd = umem.fd;
@@ -870,7 +866,7 @@ impl XskSocket {
                 // out_xsk_alloc
                 drop(xsk);
 
-                return err;
+                return Err(err);
             }
 
             netns_cookie = INIT_NS as u64;
@@ -893,7 +889,7 @@ impl XskSocket {
                     // out_xsk_alloc
                     drop(xsk);
 
-                    return err;
+                    return Err(err);
                 }
 
                 let ctx = match XskCtx::xsk_create_ctx(
@@ -918,7 +914,7 @@ impl XskSocket {
                         // out_xsk_alloc
                         drop(xsk);
 
-                        return libc::ENOMEM;
+                        return Err(-libc::ENOMEM);
                     }
                 };
 
@@ -958,7 +954,7 @@ impl XskSocket {
                 // out_xsk_alloc
                 drop(xsk);
 
-                return err;
+                return Err(err);
             }
 
             if xsk.fd == umem.fd {
@@ -996,7 +992,7 @@ impl XskSocket {
                 // out_xsk_alloc
                 drop(xsk);
 
-                return err;
+                return Err(err);
             }
 
             if xsk.fd == umem.fd {
@@ -1025,7 +1021,7 @@ impl XskSocket {
             // out_xsk_alloc
             drop(xsk);
 
-            return err;
+            return Err(err);
         }
 
         // rx mmap
@@ -1060,7 +1056,7 @@ impl XskSocket {
                 // out_xsk_alloc
                 drop(xsk);
 
-                return err;
+                return Err(err);
             }
 
             unsafe {
@@ -1121,7 +1117,7 @@ impl XskSocket {
                 // out_xsk_alloc
                 drop(xsk);
 
-                return err;
+                return Err(err);
             }
 
             unsafe {
@@ -1201,7 +1197,7 @@ impl XskSocket {
             // out_xsk_alloc
             drop(xsk);
 
-            return err;
+            return Err(err);
         }
 
         // Setup xdp prog
@@ -1211,18 +1207,14 @@ impl XskSocket {
             if err != 0 {
                 // goto out_mmap_tx;
 
-                return err;
+                return Err(err);
             }
-        }
-
-        unsafe {
-            (*xsk_ptr) = xsk.as_mut();
         }
 
         umem.fill_save = std::ptr::null_mut();
         umem.comp_save = std::ptr::null_mut();
 
-        return 0;
+        return Ok(*xsk);
     }
 
     pub fn set_socket_config(cfg: &mut XskSocketConfig, usr_cfg: &Option<XskSocketConfig>) -> i32 {
