@@ -1,13 +1,8 @@
 use libc::{sockaddr, MAP_FAILED, MAP_POPULATE, MAP_SHARED, PROT_READ, PROT_WRITE, SOL_XDP};
 
-use crate::{
-    buf::{BoundedBuf, BoundedBufMut},
-};
+use crate::buf::{BoundedBuf, BoundedBufMut};
 
-use std::sync::{
-    atomic::{self, AtomicPtr},
-};
-
+use std::sync::atomic::{self, AtomicPtr};
 
 //use libxdp_sys::{_xsk_ring_cons__peek, _xsk_ring_cons__release, _xsk_ring_cons__rx_desc};
 
@@ -75,6 +70,105 @@ pub struct XskCtx {
     xsks_map_fs: i32,
     refcnt_map_fd: i32,
     ifname: String,
+}
+
+impl XskCtx {
+    pub fn xsk_get_ctx(
+        umem: &mut XskUmem,
+        netns_cookie: u64,
+        ifindex: i32,
+        queue_id: u32,
+    ) -> Option<Box<XskCtx>> {
+        if umem.ctx_list.is_empty() {
+            return None;
+        }
+
+        for ctx in &umem.ctx_list {
+            if (ctx.netns_cookie == netns_cookie)
+                && (ctx.ifindex == ifindex)
+                && (ctx.queue_id == queue_id)
+            {
+                return Some(ctx.clone());
+            }
+        }
+
+        None
+    }
+
+    pub fn xsk_put_ctx(ctx: &mut XskCtx, unmap: bool) {
+        let umem = ctx.umem;
+        let mut off: XdpMmapOffsets = Default::default();
+        let mut err = 0;
+
+        if (ctx.refcount - 1) > 0 {
+            return;
+        }
+
+        if unmap {
+            unsafe {
+                err = xsk_get_mmap_offsets((*umem).fd, &mut off);
+            }
+
+            if err != 0 {
+                drop(ctx.to_owned());
+
+                return;
+            }
+
+            unsafe {
+                libc::munmap(
+                    (*ctx.fill).ring,
+                    (off.fr.desc as usize)
+                        + ((*umem).config.fill_size as usize) * std::mem::size_of::<u64>(),
+                );
+
+                libc::munmap(
+                    (*ctx.fill).ring,
+                    (off.cr.desc as usize)
+                        + ((*umem).config.comp_size as usize) * std::mem::size_of::<u64>(),
+                );
+            }
+
+            drop(ctx.to_owned());
+        }
+    }
+
+    pub fn xsk_create_ctx(
+        xsk: &XskSocket,
+        umem: &mut XskUmem,
+        netns_cookie: u64,
+        ifindex: i32,
+        ifname: &String,
+        queue_id: u32,
+        fill: *mut XskRing,
+        comp: *mut XskRing,
+    ) -> Option<XskCtx> {
+        let mut err: i32 = 0;
+        let mut ctx: Box<XskCtx> = Default::default();
+
+        if umem.fill_save.is_null() {
+            err = xsk_create_umem_rings(umem, xsk.fd, fill, comp);
+
+            if err != 0 {
+                return None;
+            }
+        } else if (umem.fill_save != fill) || (umem.comp_save != comp) {
+            // TODO: Copy data
+        }
+
+        ctx.netns_cookie = netns_cookie;
+        ctx.ifindex = ifindex;
+        ctx.refcount = 1;
+        ctx.umem = umem;
+        ctx.queue_id = queue_id;
+        ctx.ifname = ifname.clone();
+        ctx.fill = fill;
+        ctx.comp = comp;
+
+        umem.ctx_list.push_back(ctx.clone());
+
+        Some(*ctx)
+    }
 }
 
 impl Default for XskCtx {
@@ -328,7 +422,7 @@ impl XskRing {
         }
     }
 
-    pub fn xsk_ring_cons__peek(cons: *mut XskRing, nb: u32, idx: &mut u32) -> u32 {
+    pub fn xsk_ring_cons_peek(cons: *mut XskRing, nb: u32, idx: &mut u32) -> u32 {
         let entries = XskRing::xsk_cons_nb_avail(cons, nb);
 
         if entries > 0 {
@@ -341,7 +435,7 @@ impl XskRing {
         entries
     }
 
-    pub fn xsk_ring_cons__rx_desc(rx: *const XskRing, idx: u32) -> *const XdpDesc {
+    pub fn xsk_ring_cons_rx_desc(rx: *const XskRing, idx: u32) -> *const XdpDesc {
         unsafe {
             let descs: *const XdpDesc = (*rx).ring as *const XdpDesc;
 
@@ -351,7 +445,7 @@ impl XskRing {
         }
     }
 
-    pub fn xsk_ring_cons__release(cons: *mut XskRing, nb: u32) {
+    pub fn xsk_ring_cons_release(cons: *mut XskRing, nb: u32) {
         unsafe {
             let atomic_consumer = AtomicPtr::new((*cons).consumer);
 
@@ -378,7 +472,7 @@ impl XskRing {
         }
     }
 
-    pub fn xsk_ring_prod__reserve(prod: *mut XskRing, nb: u32, idx: *mut u32) -> u32 {
+    pub fn xsk_ring_prod_reserve(prod: *mut XskRing, nb: u32, idx: *mut u32) -> u32 {
         if XskRing::xsk_prod_nb_free(prod, nb) < nb {
             return 0;
         }
@@ -391,7 +485,7 @@ impl XskRing {
         nb
     }
 
-    pub fn xsk_ring_prod__fill_addr(fill: *mut XskRing, idx: u32) -> *const u64 {
+    pub fn xsk_ring_prod_fill_addr(fill: *mut XskRing, idx: u32) -> *const u64 {
         unsafe {
             let addrs: *mut u64 = (*fill).ring as *mut u64;
 
@@ -621,103 +715,6 @@ pub fn xsk_get_mmap_offsets(fd: i32, off: &mut XdpMmapOffsets) -> i32 {
     libc::EINVAL
 }
 
-pub fn xsk_get_ctx(
-    umem: &mut XskUmem,
-    netns_cookie: u64,
-    ifindex: i32,
-    queue_id: u32,
-) -> Option<Box<XskCtx>> {
-    if umem.ctx_list.is_empty() {
-        return None;
-    }
-
-    for ctx in &umem.ctx_list {
-        if (ctx.netns_cookie == netns_cookie)
-            && (ctx.ifindex == ifindex)
-            && (ctx.queue_id == queue_id)
-        {
-            return Some(ctx.clone());
-        }
-    }
-
-    None
-}
-
-pub fn xsk_put_ctx(ctx: &mut XskCtx, unmap: bool) {
-    let umem = ctx.umem;
-    let mut off: XdpMmapOffsets = Default::default();
-    let mut err = 0;
-
-    if (ctx.refcount - 1) > 0 {
-        return;
-    }
-
-    if unmap {
-        unsafe {
-            err = xsk_get_mmap_offsets((*umem).fd, &mut off);
-        }
-
-        if err != 0 {
-            drop(ctx.to_owned());
-
-            return;
-        }
-
-        unsafe {
-            libc::munmap(
-                (*ctx.fill).ring,
-                (off.fr.desc as usize)
-                    + ((*umem).config.fill_size as usize) * std::mem::size_of::<u64>(),
-            );
-
-            libc::munmap(
-                (*ctx.fill).ring,
-                (off.cr.desc as usize)
-                    + ((*umem).config.comp_size as usize) * std::mem::size_of::<u64>(),
-            );
-        }
-
-        drop(ctx.to_owned());
-    }
-}
-
-pub fn xsk_create_ctx(
-    xsk: &XskSocket,
-    umem: &mut XskUmem,
-    netns_cookie: u64,
-    ifindex: i32,
-    ifname: &String,
-    queue_id: u32,
-    fill: *mut XskRing,
-    comp: *mut XskRing,
-) -> Option<XskCtx> {
-    let mut err: i32 = 0;
-    let mut ctx: Box<XskCtx> = Default::default();
-
-    if umem.fill_save.is_null() {
-        err = xsk_create_umem_rings(umem, xsk.fd, fill, comp);
-
-        if err != 0 {
-            return None;
-        }
-    } else if (umem.fill_save != fill) || (umem.comp_save != comp) {
-        // Copy data
-    }
-
-    ctx.netns_cookie = netns_cookie;
-    ctx.ifindex = ifindex;
-    ctx.refcount = 1;
-    ctx.umem = umem;
-    ctx.queue_id = queue_id;
-    ctx.ifname = ifname.clone();
-    ctx.fill = fill;
-    ctx.comp = comp;
-
-    umem.ctx_list.push_back(ctx.clone());
-
-    Some(*ctx)
-}
-
 pub struct XskSocket {
     rx: *mut XskRing,
     tx: *mut XskRing,
@@ -876,7 +873,7 @@ impl XskSocket {
         }
 
         // Get the correct umem context for this particular AF_XDP socket. If no existing context exists then we create a new context and add it to the list.
-        let mut ctx = match xsk_get_ctx(umem, netns_cookie, ifindex, queue_id) {
+        let mut ctx = match XskCtx::xsk_get_ctx(umem, netns_cookie, ifindex, queue_id) {
             Some(_ctx) => *_ctx,
             None => {
                 if fill.is_null() || comp.is_null() {
@@ -895,7 +892,7 @@ impl XskSocket {
                     return err;
                 }
 
-                let ctx = match xsk_create_ctx(
+                let ctx = match XskCtx::xsk_create_ctx(
                     &xsk,
                     umem,
                     netns_cookie,
@@ -945,7 +942,7 @@ impl XskSocket {
                 // out_put_ctx
                 let unmap = umem.fill_save != fill;
 
-                xsk_put_ctx(&mut ctx, unmap);
+                XskCtx::xsk_put_ctx(&mut ctx, unmap);
 
                 // out_socket
                 if (umem.refcount - 1) == 0 {
@@ -983,7 +980,7 @@ impl XskSocket {
                 // out_put_ctx
                 let unmap = umem.fill_save != fill;
 
-                xsk_put_ctx(&mut ctx, unmap);
+                XskCtx::xsk_put_ctx(&mut ctx, unmap);
 
                 // out_socket
                 if (umem.refcount - 1) == 0 {
@@ -1012,7 +1009,7 @@ impl XskSocket {
             // out_put_ctx
             let unmap = umem.fill_save != fill;
 
-            xsk_put_ctx(&mut ctx, unmap);
+            XskCtx::xsk_put_ctx(&mut ctx, unmap);
 
             // out_socket
             if (umem.refcount - 1) == 0 {
@@ -1047,7 +1044,7 @@ impl XskSocket {
                 // out_put_ctx
                 let unmap = umem.fill_save != fill;
 
-                xsk_put_ctx(&mut ctx, unmap);
+                XskCtx::xsk_put_ctx(&mut ctx, unmap);
 
                 // out_socket
                 if (umem.refcount - 1) == 0 {
@@ -1108,7 +1105,7 @@ impl XskSocket {
                 // out_put_ctx
                 let unmap = umem.fill_save != fill;
 
-                xsk_put_ctx(&mut ctx, unmap);
+                XskCtx::xsk_put_ctx(&mut ctx, unmap);
 
                 // out_socket
                 if (umem.refcount - 1) == 0 {
@@ -1188,7 +1185,7 @@ impl XskSocket {
             // out_put_ctx
             let unmap = umem.fill_save != fill;
 
-            xsk_put_ctx(&mut ctx, unmap);
+            XskCtx::xsk_put_ctx(&mut ctx, unmap);
 
             // out_socket
             if (umem.refcount - 1) == 0 {
