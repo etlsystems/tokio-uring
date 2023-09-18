@@ -486,6 +486,18 @@ impl XskRing {
         }
     }
 
+    pub fn xsk_ring_cons_comp_addr(comp: &XskRing, idx: u32) -> *mut u64 {
+        unsafe {
+            let addrs: *mut u64 = comp.ring as *mut u64;
+
+            let addrs = std::slice::from_raw_parts_mut(addrs, comp.mask as usize);
+
+            let ret = &mut addrs[(idx & comp.mask) as usize];
+
+            ret
+        }
+    }
+
     pub fn xsk_prod_nb_free(r: &mut XskRing, nb: u32) -> u32 {
         let free_entries: u32 = r.cached_cons - r.cached_prod;
 
