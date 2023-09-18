@@ -1,17 +1,13 @@
 use libc::{sockaddr, MAP_FAILED, MAP_POPULATE, MAP_SHARED, PROT_READ, PROT_WRITE, SOL_XDP};
 
 use crate::{
-    buf::fixed::FixedBuf,
     buf::{BoundedBuf, BoundedBufMut},
-    io::{SharedFd, Socket},
-    UnsubmittedWrite,
 };
 
 use std::sync::{
     atomic::{self, AtomicPtr},
-    Arc,
 };
-use std::{borrow::BorrowMut, f64::consts, os::raw::c_char};
+
 
 //use libxdp_sys::{_xsk_ring_cons__peek, _xsk_ring_cons__release, _xsk_ring_cons__rx_desc};
 
@@ -19,7 +15,7 @@ const XSK_RING_CONS__DEFAULT_NUM_DESCS: u32 = 2048;
 const XSK_RING_PROD__DEFAULT_NUM_DESCS: u32 = 2048;
 
 const XSK_UMEM__DEFAULT_FRAME_SHIFT: u32 = 12; /* 4096 bytes */
-const XSK_UMEM__DEFAULT_FRAME_SIZE: u32 = (1 << XSK_UMEM__DEFAULT_FRAME_SHIFT);
+const XSK_UMEM__DEFAULT_FRAME_SIZE: u32 = 1 << XSK_UMEM__DEFAULT_FRAME_SHIFT;
 const XSK_UMEM__DEFAULT_FRAME_HEADROOM: u32 = 0;
 const XSK_UMEM__DEFAULT_FLAGS: u32 = 0;
 
@@ -54,7 +50,7 @@ const XDP_UMEM_PGOFF_COMPLETION_RING: u64 = 0x180000000;
 const XDP_FLAGS_UPDATE_IF_NOEXIST: u32 = 1 << 0;
 
 const XDP_SHARED_UMEM: u32 = 1 << 0;
-const XDP_COPY: u32 = (1 << 1); /* Force copy-mode */
+const XDP_COPY: u32 = 1 << 1; /* Force copy-mode */
 const XDP_ZEROCOPY: u32 = 1 << 2; /* Force zero-copy mode */
 
 /* If this option is set, the driver might go sleep and in that case
