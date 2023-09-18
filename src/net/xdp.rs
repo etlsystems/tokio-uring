@@ -1318,7 +1318,7 @@ impl XskSocket {
 
                 let addr = (*desc).addr;
                 let len = (*desc).len;
-                //let ptr = self.umem.area.get_ptr().add(addr);
+                let ptr = (*((*(self.ctx)).umem)).umem_area.add(addr as usize);
 
                 //buf.get_buf().put_slice(src)
 
