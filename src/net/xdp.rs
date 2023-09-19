@@ -2,7 +2,10 @@ use libc::{sockaddr, MAP_FAILED, MAP_POPULATE, MAP_SHARED, PROT_READ, PROT_WRITE
 
 use crate::buf::{BoundedBuf, BoundedBufMut};
 
-use std::sync::atomic::{self, AtomicPtr};
+use std::{
+    sync::atomic::{self, AtomicPtr},
+    time::Duration,
+};
 
 //use libxdp_sys::{_xsk_ring_cons__peek, _xsk_ring_cons__release, _xsk_ring_cons__rx_desc};
 
@@ -207,7 +210,7 @@ impl XskUmem {
         completion_ring_size: u32,
         fill_ring_size: u32,
     ) -> Result<XskUmem, i32> {
-        // Check that ring sizes are both powers of two.
+        // TODO: Check that ring sizes are both powers of two.
 
         // Init Umem config
         let umem_cfg = XskUmemConfig {
@@ -789,7 +792,7 @@ impl XskSocket {
         tx_ring_size: u32,
         //options: SocketOptions,
     ) -> Result<XskSocket, i32> {
-        // Check that the ring sizes are both powers of two.
+        // TODO: Check that the ring sizes are both powers of two.
 
         // Setup socket options
         let socket_config = XskSocketConfig {
@@ -923,7 +926,7 @@ impl XskSocket {
             netns_cookie = INIT_NS as u64;
         }
 
-        // Get the correct umem context for this particular AF_XDP socket. If no existing context exists then we create a new context and add it to the list.
+        // Get the correct umem context for this particular AF_XDP socket. If no existing context matches then we create a new context and add it to the list.
         let mut ctx = match XskCtx::xsk_get_ctx(umem, netns_cookie, ifindex, queue_id) {
             Some(_ctx) => *_ctx,
             None => {
@@ -1298,12 +1301,30 @@ impl XskSocket {
         //libxdp_sys::sendmsg;
     }
 
-    pub async fn recvmsg<T: BoundedBufMut>(&self, _buf: Vec<T>)
-    /*-> crate::BufResult<(usize, std::net::SocketAddr), Vec<T>>*/
-    {
+    pub async fn recvmsg<T: BoundedBufMut>(
+        &mut self,
+        bufs: &mut Vec<T>,
+        mut batch_size: usize,
+    ) -> usize
+/*-> crate::BufResult<(usize, std::net::SocketAddr), Vec<T>>*/ {
+        let mut total_received: usize = 0;
+
+        batch_size = std::cmp::min(bufs.capacity(), batch_size);
+
+        while total_received < batch_size {
+            total_received += self.try_recv(bufs, batch_size - total_received);
+
+            let _ = tokio::time::sleep(Duration::from_micros(100));
+        }
+
+        total_received
     }
 
-    pub fn try_recv<T: BoundedBufMut>(&mut self, bufs: Vec<T>, mut batch_size: usize) -> usize {
+    pub fn try_recv<T: BoundedBufMut>(
+        &mut self,
+        bufs: &mut Vec<T>,
+        mut batch_size: usize,
+    ) -> usize {
         let mut idx = 0;
         let received: usize;
 
