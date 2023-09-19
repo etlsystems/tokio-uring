@@ -1374,23 +1374,21 @@ impl XskSocket {
                     current_packet_length += len as usize;
                 }
 
-                let xdp_frame: &mut [u8];
+                let xdp_packet: &mut [u8];
 
                 // Check if packet continues to the next frame or not.
                 if (options & XDP_PKT_CONTD) == 0 {
                     new_packet = true;
-                    xdp_frame = std::slice::from_raw_parts_mut(
+                    xdp_packet = std::slice::from_raw_parts_mut(
                         current_packet_ptr as *mut u8,
                         current_packet_length as usize,
                     );
                 } else {
                     new_packet = false;
                 }
-
-                //buf.get_buf().put_slice(src)
-
-                //buf.
             }
+
+            //bufs.push(bufs.)
         }
 
         unsafe {
