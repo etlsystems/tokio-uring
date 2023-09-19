@@ -210,7 +210,10 @@ impl XskUmem {
         completion_ring_size: u32,
         fill_ring_size: u32,
     ) -> Result<XskUmem, i32> {
-        // TODO: Check that ring sizes are both powers of two.
+        // Check that ring sizes are both powers of two.
+        if !completion_ring_size.is_power_of_two() || !fill_ring_size.is_power_of_two() {
+            return Err(-libc::ENOTSUP);
+        }
 
         // Init Umem config
         let umem_cfg = XskUmemConfig {
@@ -792,7 +795,10 @@ impl XskSocket {
         tx_ring_size: u32,
         //options: SocketOptions,
     ) -> Result<XskSocket, i32> {
-        // TODO: Check that the ring sizes are both powers of two.
+        // Check that the ring sizes are both powers of two.
+        if !rx_ring_size.is_power_of_two() || !tx_ring_size.is_power_of_two() {
+            return Err(-libc::ENOTSUP);
+        }
 
         // Setup socket options
         let socket_config = XskSocketConfig {
