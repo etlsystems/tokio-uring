@@ -61,6 +61,8 @@ const XDP_ZEROCOPY: u32 = 1 << 2; /* Force zero-copy mode */
  */
 const XDP_USE_NEED_WAKEUP: u32 = 1 << 3;
 
+const XDP_PKT_CONTD: u32 = 1 << 0;
+
 #[derive(Clone)]
 pub struct XskCtx {
     fill: *mut XskRing,
@@ -1348,6 +1350,10 @@ impl XskSocket {
 
         //let buf_len_available = ;
 
+        let mut new_packet = true;
+        let mut current_packet_ptr: *mut std::ffi::c_void = std::ptr::null_mut();
+        let mut current_packet_length: usize = 0;
+
         for _ in 0..received {
             let desc: *const XdpDesc;
             let buf: T;
@@ -1358,6 +1364,28 @@ impl XskSocket {
                 let addr = (*desc).addr;
                 let len = (*desc).len;
                 let ptr = (*((*(self.ctx)).umem)).umem_area.add(addr as usize);
+                let options = (*desc).options;
+
+                // Check if we are expecting a new packet, or to continue an existing packet.
+                if new_packet {
+                    current_packet_length = len as usize;
+                    current_packet_ptr = ptr;
+                } else {
+                    current_packet_length += len as usize;
+                }
+
+                let xdp_frame: &mut [u8];
+
+                // Check if packet continues to the next frame or not.
+                if (options & XDP_PKT_CONTD) == 0 {
+                    new_packet = true;
+                    xdp_frame = std::slice::from_raw_parts_mut(
+                        current_packet_ptr as *mut u8,
+                        current_packet_length as usize,
+                    );
+                } else {
+                    new_packet = false;
+                }
 
                 //buf.get_buf().put_slice(src)
 
