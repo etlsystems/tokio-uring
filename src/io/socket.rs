@@ -12,6 +12,7 @@ use std::{
     os::unix::io::{AsRawFd, IntoRawFd, RawFd},
     path::Path,
 };
+use crate::io::cancel::Cancel;
 
 #[derive(Clone)]
 pub(crate) struct Socket {
@@ -284,5 +285,12 @@ impl Socket {
 impl AsRawFd for Socket {
     fn as_raw_fd(&self) -> RawFd {
         self.fd.raw_fd()
+    }
+}
+
+impl Drop for Socket {
+    fn drop(&mut self) {
+        // Request cancellation of all in-flight operations depending on this socket
+        let _ = Op::<Cancel>::cancel_fd(&self.fd);
     }
 }
