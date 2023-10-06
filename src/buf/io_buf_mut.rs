@@ -54,3 +54,14 @@ unsafe impl IoBufMut for bytes::BytesMut {
         self.set_len(init_len);
     }
 }
+
+#[cfg(feature = "mmap")]
+unsafe impl IoBufMut for memmap2::MmapMut {
+    fn stable_mut_ptr(&mut self) -> *mut u8 {
+        self.as_mut_ptr()
+    }
+
+    unsafe fn set_init(&mut self, _init_len: usize) {
+        // Memory is zero initialised
+    }
+}
