@@ -1,3 +1,5 @@
+use std::mem::ManuallyDrop;
+
 /// An `io-uring` compatible buffer.
 ///
 /// The `IoBuf` trait is implemented by buffer types that can be used with
@@ -78,6 +80,20 @@ unsafe impl IoBuf for &'static str {
 
     fn bytes_total(&self) -> usize {
         self.bytes_init()
+    }
+}
+
+unsafe impl<T: IoBuf> IoBuf for ManuallyDrop<T> {
+    fn stable_ptr(&self) -> *const u8 {
+        self.stable_ptr()
+    }
+
+    fn bytes_init(&self) -> usize {
+        self.bytes_init()
+    }
+
+    fn bytes_total(&self) -> usize {
+        self.bytes_total()
     }
 }
 

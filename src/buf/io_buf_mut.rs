@@ -1,3 +1,5 @@
+use std::mem::ManuallyDrop;
+
 use crate::buf::IoBuf;
 
 /// A mutable`io-uring` compatible buffer.
@@ -41,6 +43,17 @@ unsafe impl IoBufMut for Vec<u8> {
 
     unsafe fn set_init(&mut self, init_len: usize) {
         self.set_len(init_len);
+    }
+}
+
+
+unsafe impl<T: IoBufMut> IoBufMut for ManuallyDrop<T> {
+    fn stable_mut_ptr(&mut self) -> *mut u8 {
+        self.stable_mut_ptr()
+    }
+
+    unsafe fn set_init(&mut self, init_len: usize)  {
+        self.set_init(init_len)
     }
 }
 
