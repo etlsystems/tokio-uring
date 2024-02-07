@@ -56,6 +56,14 @@ impl Handle {
         self.inner.borrow_mut().register_buffers(buffers)
     }
 
+    pub(crate) fn register_buffers_iov(
+        &self,
+        iovs: &[libc::iovec]
+    ) -> io::Result<()> {
+        self.inner.borrow_mut().register_buffers_iov(iovs)
+    }
+
+
     pub(crate) fn unregister_buffers(
         &self,
         buffers: Rc<RefCell<dyn FixedBuffers>>,

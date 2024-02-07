@@ -134,6 +134,14 @@ impl Runtime {
 
         res
     }
+
+    /// Quick and dirty hack
+    pub unsafe fn register_buffers_iov(iovs: &[libc::iovec]) -> Result<(), io::Error>{
+        CONTEXT.with(|cx| 
+            cx.handle().unwrap().register_buffers_iov(iovs)
+        )
+    }
+
 }
 
 impl Drop for Runtime {

@@ -121,6 +121,18 @@ impl Driver {
         Ok(())
     }
 
+    pub fn register_buffers_iov(
+        &mut self,
+        iovs: &[libc::iovec],
+    ) -> io::Result<()> {
+        unsafe {
+            self.uring
+                .submitter()
+                .register_buffers(iovs)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn unregister_buffers(
         &mut self,
         buffers: Rc<RefCell<dyn FixedBuffers>>,
