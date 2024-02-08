@@ -18,6 +18,7 @@ impl<T> Op<UringCmd16<T>> {
         fd: &SharedFd,
         cmd_op: u32,
         cmd: [u8; 16],
+        buf_index: Option<u16>,
         metadata: T,
     ) -> io::Result<Op<UringCmd16<T>>> {
         use io_uring::{opcode, types};
@@ -30,6 +31,7 @@ impl<T> Op<UringCmd16<T>> {
                 },
                 |_| {
                     opcode::UringCmd16::new(types::Fd(fd.raw_fd()), cmd_op)
+                        .buf_index(buf_index)
                         .cmd(cmd)
                         .build()
                 },

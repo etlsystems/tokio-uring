@@ -190,9 +190,10 @@ impl File {
         &self,
         cmd_op: u32,
         cmd: [u8; 16],
+        buffer_index : Option<u16>,
         metadata: T,
     ) -> (io::Result<u32>, T) {
-        let op = Op::uring_cmd16(&self.fd, cmd_op, cmd, metadata).unwrap();
+        let op = Op::uring_cmd16(&self.fd, cmd_op, cmd, buffer_index, metadata).unwrap();
         op.await
     }
 
