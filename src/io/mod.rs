@@ -60,3 +60,4 @@ mod writev_all;
 pub(crate) use writev_all::writev_at_all;
 
 mod uring_cmd;
+pub use uring_cmd::UringCmd16;

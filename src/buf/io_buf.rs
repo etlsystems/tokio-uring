@@ -85,15 +85,18 @@ unsafe impl IoBuf for &'static str {
 
 unsafe impl<T: IoBuf> IoBuf for ManuallyDrop<T> {
     fn stable_ptr(&self) -> *const u8 {
-        self.stable_ptr()
+        let t: &T = self;
+        t.stable_ptr()
     }
 
     fn bytes_init(&self) -> usize {
-        self.bytes_init()
+        let t: &T = self;
+        t.bytes_init()
     }
 
     fn bytes_total(&self) -> usize {
-        self.bytes_total()
+        let t: &T = self;
+        t.bytes_total()
     }
 }
 

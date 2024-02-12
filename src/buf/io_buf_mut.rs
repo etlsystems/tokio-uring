@@ -49,11 +49,13 @@ unsafe impl IoBufMut for Vec<u8> {
 
 unsafe impl<T: IoBufMut> IoBufMut for ManuallyDrop<T> {
     fn stable_mut_ptr(&mut self) -> *mut u8 {
-        self.stable_mut_ptr()
+        let t: &mut T = self;
+        t.stable_mut_ptr()
     }
 
     unsafe fn set_init(&mut self, init_len: usize)  {
-        self.set_init(init_len)
+        let t: &mut T = self;
+        t.set_init(init_len)
     }
 }
 

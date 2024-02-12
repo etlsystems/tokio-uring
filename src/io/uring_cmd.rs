@@ -3,7 +3,7 @@ use crate::runtime::driver::op::{Completable, CqeResult, Op};
 use crate::runtime::CONTEXT;
 use std::io;
 
-pub(crate) struct UringCmd16<T> {
+pub struct UringCmd16<T> {
     /// Holds a strong ref to the FD, preventing the file from being closed
     /// while the operation is in-flight.
     #[allow(dead_code)]

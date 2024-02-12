@@ -98,7 +98,7 @@ impl<T: IoBufMut> Pool<T> {
     // If the free buffer list for this capacity is not empty, checks out the first buffer
     // from the list and returns its data. Otherwise, returns None.
     pub(crate) fn try_next(&mut self, cap: usize) -> Option<CheckedOutBuf> {
-        let _ = self.state_change_mutex.lock();
+        let _lock_guard = self.state_change_mutex.lock();
 
         let free_head = self.free_buf_head_by_cap.get_mut(&cap)?;
 
@@ -151,7 +151,7 @@ impl<T: IoBufMut> Pool<T> {
             "the buffer must be checked out"
         );
 
-        let _ = self.state_change_mutex.lock();
+        let _lock_guard = self.state_change_mutex.lock();
 
         // Link the buffer as the new head of the free list for its capacity.
         // Recently checked in buffers will be first to be reused,
@@ -175,7 +175,7 @@ impl<T: IoBufMut> Pool<T> {
     }
 
     pub fn check_buffer_states(&mut self) {
-        let _ = self.state_change_mutex.lock();
+        let _lock_guard = self.state_change_mutex.lock();
 
         info!(
             "check_buffer_states - self.states.len() = {}",

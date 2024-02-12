@@ -559,7 +559,7 @@ mod test {
     use super::*;
 
     #[derive(Debug)]
-    pub(crate) struct Completion {
+    pub struct Completion {
         result: io::Result<u32>,
         flags: u32,
         data: Rc<()>,
@@ -688,12 +688,13 @@ mod test {
         assert_eq!(1, num_operations());
 
         CONTEXT.with(|cx| {
+            let cqe: CEntry = unsafe { mem::zeroed() };
             cx.handle()
                 .unwrap()
                 .inner
                 .borrow_mut()
                 .ops
-                .complete(index, unsafe { mem::zeroed() })
+                .complete(index,  cqe  )
         });
 
         assert_eq!(1, Rc::strong_count(&data));
@@ -724,7 +725,7 @@ mod test {
     }
 
     fn complete(op: &Op<Rc<()>>) {
-        let cqe = unsafe { mem::zeroed() };
+        let cqe: CEntry = unsafe { mem::zeroed() };
 
         CONTEXT.with(|cx| {
             let driver = cx.handle().unwrap();

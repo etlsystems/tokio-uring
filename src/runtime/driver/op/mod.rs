@@ -125,7 +125,7 @@ pub trait OneshotOutputTransform {
 }
 
 /// In-flight operation
-pub(crate) struct Op<T: 'static, CqeType = SingleCQE> {
+pub struct Op<T: 'static, CqeType = SingleCQE> {
     driver: driver::WeakHandle,
     // Operation index in the slab
     index: usize,
@@ -138,13 +138,14 @@ pub(crate) struct Op<T: 'static, CqeType = SingleCQE> {
 }
 
 /// A Marker for Ops which expect only a single completion event
-pub(crate) struct SingleCQE;
+pub struct SingleCQE;
 
 /// A Marker for Operations will process multiple completion events,
 /// which combined resolve to a single Future value
-pub(crate) struct MultiCQEFuture;
+pub struct MultiCQEFuture;
 
-pub(crate) trait Completable {
+// TODO: Seal
+pub trait Completable {
     type Output;
     /// `complete` will be called for cqe's do not have the `more` flag set
     fn complete(self, cqe: CqeResult) -> Self::Output;
@@ -176,7 +177,7 @@ pub(crate) enum Lifecycle {
 }
 
 /// A single CQE entry
-pub(crate) struct CqeResult {
+pub struct CqeResult {
     pub(crate) result: io::Result<u32>,
     pub(crate) flags: u32,
 }
