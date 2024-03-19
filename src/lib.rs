@@ -72,6 +72,7 @@ macro_rules! syscall {
 #[macro_use]
 mod future;
 mod io;
+pub use io::UringCmd16;
 mod runtime;
 
 pub mod buf;
@@ -83,7 +84,7 @@ pub use runtime::driver::op::{InFlightOneshot, OneshotOutputTransform, Unsubmitt
 pub use runtime::spawn;
 pub use runtime::Runtime;
 
-use crate::runtime::driver::op::Op;
+pub use crate::runtime::driver::op::Op;
 use crate::runtime::driver::{CEntry, SEntry};
 use std::future::Future;
 
